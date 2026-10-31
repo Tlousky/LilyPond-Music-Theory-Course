@@ -45,6 +45,7 @@ export const RhythmMetronome: React.FC<RhythmMetronomeProps> = ({ onTapAccuracy 
 
   // Rhythm Spacebar / Button Tapper
   const handleTap = () => {
+    audioEngine.playUiClick(0.35);
     if (!isPlaying) {
       setIsPlaying(true);
       return;
@@ -81,7 +82,10 @@ export const RhythmMetronome: React.FC<RhythmMetronomeProps> = ({ onTapAccuracy 
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setIsPlaying(!isPlaying)}
+            onClick={() => {
+              audioEngine.playUiClick(0.4);
+              setIsPlaying(!isPlaying);
+            }}
             className={`flex items-center gap-1.5 px-3 py-1 text-xs font-bold rounded-lg transition-all ${
               isPlaying
                 ? 'bg-rose-600 hover:bg-rose-500 text-white'

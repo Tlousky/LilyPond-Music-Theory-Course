@@ -1,6 +1,7 @@
 import React from 'react';
 import { Lesson, FUNDAMENTALS_LESSONS, REPERTOIRE_PIECES } from '../../data/curriculumData';
 import { UserState } from '../../lib/gamification/UserProgressStore';
+import { audioEngine } from '../../lib/audio/SoundFontAudioEngine';
 import { CheckCircle2, Lock, Play, Star, BookOpen, Music, Code2 } from 'lucide-react';
 
 interface SkillTreeProps {
@@ -12,6 +13,11 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
   const completedCount = userState.completedLessons.length;
   const totalCount = FUNDAMENTALS_LESSONS.length;
   const progressPercent = Math.round((completedCount / totalCount) * 100);
+
+  const handleSelectLesson = (lesson: Lesson) => {
+    audioEngine.playUiSelect();
+    onSelectLesson(lesson);
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
@@ -74,7 +80,7 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
                   {/* Status Circle / Play Button */}
                   <button
                     disabled={!isUnlocked}
-                    onClick={() => isUnlocked && onSelectLesson(lesson)}
+                    onClick={() => isUnlocked && handleSelectLesson(lesson)}
                     aria-label={isCompleted ? `Review ${lesson.title}` : `Start ${lesson.title}`}
                     className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-transform ${
                       isCompleted
@@ -98,7 +104,7 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
                     <div className="flex items-center gap-2">
                       <button
                         disabled={!isUnlocked}
-                        onClick={() => isUnlocked && onSelectLesson(lesson)}
+                        onClick={() => isUnlocked && handleSelectLesson(lesson)}
                         className="text-left text-base font-bold text-white hover:text-indigo-400 transition-colors disabled:hover:text-white"
                       >
                         {lesson.title}
@@ -138,7 +144,7 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
                 {/* Action button */}
                 <button
                   disabled={!isUnlocked}
-                  onClick={() => onSelectLesson(lesson)}
+                  onClick={() => handleSelectLesson(lesson)}
                   className={`px-5 py-2.5 rounded-xl font-semibold text-sm transition-all whitespace-nowrap self-end sm:self-center ${
                     isCompleted
                       ? 'bg-slate-800 text-slate-200 hover:bg-slate-700'

@@ -67,6 +67,8 @@ export class SoundFontAudioEngine {
   private sampleBuffers: Map<string, AudioBuffer> = new Map();
   private sampleLoadingPromises: Map<string, Promise<AudioBuffer | null>> = new Map();
 
+  private isSfxMuted: boolean = false;
+
   constructor() {
     // AudioContext is initialized lazily upon user gesture
   }
@@ -80,11 +82,24 @@ export class SoundFontAudioEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
-      this.preloadMetronomeSamples();
+      this.preloadAllSamples();
     }
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  public setSfxMuted(muted: boolean) {
+    this.isSfxMuted = muted;
+  }
+
+  public getSfxMuted(): boolean {
+    return this.isSfxMuted;
+  }
+
+  public toggleSfx(): boolean {
+    this.isSfxMuted = !this.isSfxMuted;
+    return this.isSfxMuted;
   }
 
   public async loadSample(name: string, url: string): Promise<AudioBuffer | null> {
@@ -114,9 +129,170 @@ export class SoundFontAudioEngine {
     return promise;
   }
 
-  private preloadMetronomeSamples() {
+  private preloadAllSamples() {
     this.loadSample('metronome_high', '/sounds/metronome_high.wav');
     this.loadSample('metronome_low', '/sounds/metronome_low.wav');
+    this.loadSample('ui_click', '/sounds/ui_click.wav');
+    this.loadSample('ui_select', '/sounds/ui_select.wav');
+    this.loadSample('ui_success', '/sounds/ui_success.wav');
+    this.loadSample('ui_error', '/sounds/ui_error.wav');
+    this.loadSample('ui_complete', '/sounds/ui_complete.wav');
+  }
+
+  public playSample(name: string, volume: number = 0.5): boolean {
+    if (this.isSfxMuted) return false;
+    this.init();
+    if (!this.ctx || !this.masterGain) return false;
+
+    const buf = this.sampleBuffers.get(name);
+    if (!buf) return false;
+
+    const source = this.ctx.createBufferSource();
+    source.buffer = buf;
+    const gain = this.ctx.createGain();
+    gain.gain.setValueAtTime(volume, this.ctx.currentTime);
+    source.connect(gain);
+    gain.connect(this.masterGain);
+    source.start(this.ctx.currentTime);
+    return true;
+  }
+
+  /**
+   * Subtle button click
+   */
+  public playUiClick(volume: number = 0.4): void {
+    if (this.isSfxMuted) return;
+    if (this.playSample('ui_click', volume)) return;
+
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.connect(this.masterGain);
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(1400, now);
+    osc.frequency.exponentialRampToValueAtTime(120, now + 0.02);
+
+    gain.gain.setValueAtTime(volume * 0.5, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.02);
+  }
+
+  /**
+   * Option / tab selection
+   */
+  public playUiSelect(volume: number = 0.4): void {
+    if (this.isSfxMuted) return;
+    if (this.playSample('ui_select', volume)) return;
+
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.connect(this.masterGain);
+
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(880, now);
+    osc.frequency.exponentialRampToValueAtTime(440, now + 0.04);
+
+    gain.gain.setValueAtTime(volume * 0.4, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.04);
+  }
+
+  /**
+   * Correct quiz answer or exercise passed
+   */
+  public playSuccessChime(volume: number = 0.6): void {
+    if (this.isSfxMuted) return;
+    if (this.playSample('ui_success', volume)) return;
+
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+
+    [523.25, 659.25].forEach((freq, i) => {
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      gain.connect(this.masterGain!);
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, now + i * 0.06);
+
+      gain.gain.setValueAtTime(0.001, now + i * 0.06);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.4, now + i * 0.06 + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.06 + 0.25);
+
+      osc.connect(gain);
+      osc.start(now + i * 0.06);
+      osc.stop(now + i * 0.06 + 0.25);
+    });
+  }
+
+  /**
+   * Incorrect answer or grader diagnostic alert
+   */
+  public playErrorBuzz(volume: number = 0.5): void {
+    if (this.isSfxMuted) return;
+    if (this.playSample('ui_error', volume)) return;
+
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.connect(this.masterGain);
+
+    osc.type = 'sawtooth';
+    osc.frequency.setValueAtTime(180, now);
+    osc.frequency.linearRampToValueAtTime(140, now + 0.15);
+
+    gain.gain.setValueAtTime(volume * 0.35, now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.15);
+
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.15);
+  }
+
+  /**
+   * Celebratory lesson completion fanfare
+   */
+  public playCompletionFanfare(volume: number = 0.7): void {
+    if (this.isSfxMuted) return;
+    if (this.playSample('ui_complete', volume)) return;
+
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+    const now = this.ctx.currentTime;
+
+    [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+      const startTime = now + idx * 0.09;
+      const osc = this.ctx!.createOscillator();
+      const gain = this.ctx!.createGain();
+      gain.connect(this.masterGain!);
+
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.exponentialRampToValueAtTime(volume * 0.5, startTime + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.4);
+
+      osc.connect(gain);
+      osc.start(startTime);
+      osc.stop(startTime + 0.4);
+    });
   }
 
   public playMetronomeBeat(isDownbeat: boolean = false, volume: number = 0.8): void {

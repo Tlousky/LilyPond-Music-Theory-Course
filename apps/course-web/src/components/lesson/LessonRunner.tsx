@@ -103,6 +103,11 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     setIsCompiling(false);
   };
 
+  const handleStageChange = (newStage: number) => {
+    audioEngine.playUiSelect();
+    setCurrentStage(newStage);
+  };
+
   const handleGradeCode = async () => {
     const result = await exerciseGrader.gradeLilyPondChallenge(
       userCode,
@@ -111,11 +116,14 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     setGradeResult(result);
 
     if (result.passed) {
+      audioEngine.playSuccessChime();
       confetti({
         particleCount: 80,
         spread: 60,
         origin: { y: 0.7 },
       });
+    } else {
+      audioEngine.playErrorBuzz();
     }
   };
 
@@ -186,6 +194,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   };
 
   const handleFinishLesson = () => {
+    audioEngine.playCompletionFanfare();
     confetti({
       particleCount: 150,
       spread: 90,
@@ -224,7 +233,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
             return (
               <button
                 key={st.num}
-                onClick={() => setCurrentStage(st.num)}
+                onClick={() => handleStageChange(st.num)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
                   isActive
                     ? 'bg-indigo-600 text-white shadow-sm'
@@ -275,7 +284,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
           <div className="flex justify-end pt-4">
             <button
-              onClick={() => setCurrentStage(2)}
+              onClick={() => handleStageChange(2)}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
             >
               <span>Next: Theory Quiz</span>
@@ -317,7 +326,10 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                 <button
                   key={idx}
                   disabled={quizSubmitted}
-                  onClick={() => setSelectedOption(idx)}
+                  onClick={() => {
+                    setSelectedOption(idx);
+                    audioEngine.playUiSelect();
+                  }}
                   className={`w-full text-left p-4 rounded-xl border text-sm font-medium transition-all ${style}`}
                 >
                   <span className="font-mono text-xs text-slate-500 mr-2">
@@ -346,7 +358,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
           <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
-              onClick={() => setCurrentStage(1)}
+              onClick={() => handleStageChange(1)}
               className="text-xs text-slate-400 hover:text-white"
             >
               Back to Theory
@@ -355,14 +367,26 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
             {!quizSubmitted ? (
               <button
                 disabled={selectedOption === null}
-                onClick={() => setQuizSubmitted(true)}
+                onClick={() => {
+                  setQuizSubmitted(true);
+                  if (selectedOption === lesson.theory_quiz.answer) {
+                    audioEngine.playSuccessChime();
+                    confetti({
+                      particleCount: 50,
+                      spread: 60,
+                      origin: { y: 0.6 },
+                    });
+                  } else {
+                    audioEngine.playErrorBuzz();
+                  }
+                }}
                 className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-all"
               >
                 Submit Answer
               </button>
             ) : (
               <button
-                onClick={() => setCurrentStage(3)}
+                onClick={() => handleStageChange(3)}
                 className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition-all"
               >
                 <span>Next: LilyPond Syntax</span>
@@ -397,13 +421,13 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
           <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
-              onClick={() => setCurrentStage(2)}
+              onClick={() => handleStageChange(2)}
               className="text-xs text-slate-400 hover:text-white"
             >
               Back to Quiz
             </button>
             <button
-              onClick={() => setCurrentStage(4)}
+              onClick={() => handleStageChange(4)}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
             >
               <span>Next: Coding Challenge</span>
@@ -488,14 +512,14 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
           <div className="flex justify-between items-center pt-4">
             <button
-              onClick={() => setCurrentStage(3)}
+              onClick={() => handleStageChange(3)}
               className="text-xs text-slate-400 hover:text-white"
             >
               Back to Syntax
             </button>
 
             <button
-              onClick={() => setCurrentStage(5)}
+              onClick={() => handleStageChange(5)}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition-all"
             >
               <span>Next: Classical Capstone</span>
@@ -562,7 +586,10 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
                 <button
-                  onClick={() => setRepActiveTab('sheet')}
+                  onClick={() => {
+                    setRepActiveTab('sheet');
+                    audioEngine.playUiSelect();
+                  }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     repActiveTab === 'sheet'
                       ? 'bg-indigo-600 text-white shadow-sm'
@@ -574,7 +601,10 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                 </button>
 
                 <button
-                  onClick={() => setRepActiveTab('code')}
+                  onClick={() => {
+                    setRepActiveTab('code');
+                    audioEngine.playUiSelect();
+                  }}
                   className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
                     repActiveTab === 'code'
                       ? 'bg-indigo-600 text-white shadow-sm'
@@ -620,6 +650,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                     onClick={() => {
                       navigator.clipboard.writeText(repPiece.code);
                       setCopiedCode(true);
+                      audioEngine.playUiClick();
                       setTimeout(() => setCopiedCode(false), 2000);
                     }}
                     className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
@@ -682,6 +713,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                     onClick={() => {
                       setCapstoneSelectedOption(idx);
                       setCapstoneSubmitted(false);
+                      audioEngine.playUiSelect();
                     }}
                     className={`flex items-start text-left gap-2.5 p-3 rounded-lg border text-xs transition-all ${cardStyle}`}
                   >
@@ -713,6 +745,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                       setCapstoneSelectedOption(capstoneChallenge.answer);
                       setCapstoneSubmitted(true);
                       setCapstoneUnlocked(true);
+                      audioEngine.playUiClick();
                     }}
                     className="text-xs text-slate-400 hover:text-slate-200 underline"
                   >
@@ -724,11 +757,14 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                     setCapstoneSubmitted(true);
                     if (capstoneSelectedOption === capstoneChallenge.answer) {
                       setCapstoneUnlocked(true);
+                      audioEngine.playSuccessChime();
                       confetti({
                         particleCount: 60,
                         spread: 50,
                         origin: { y: 0.7 },
                       });
+                    } else {
+                      audioEngine.playErrorBuzz();
                     }
                   }}
                   disabled={capstoneSelectedOption === null}
@@ -743,7 +779,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
           {/* Footer Navigation */}
           <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
-              onClick={() => setCurrentStage(4)}
+              onClick={() => handleStageChange(4)}
               className="text-xs text-slate-400 hover:text-white"
             >
               Back to Challenge

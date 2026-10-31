@@ -35,4 +35,23 @@ describe('SoundFontAudioEngine', () => {
       engine.playMetronomeBeat(false, 0.7);
     }).not.toThrow();
   });
+
+  it('manages sound effects mute toggle and plays UI sounds without throwing', () => {
+    const engine = new SoundFontAudioEngine();
+    expect(engine.getSfxMuted()).toBe(false);
+
+    expect(engine.toggleSfx()).toBe(true);
+    expect(engine.getSfxMuted()).toBe(true);
+
+    engine.setSfxMuted(false);
+    expect(engine.getSfxMuted()).toBe(false);
+
+    expect(() => {
+      engine.playUiClick();
+      engine.playUiSelect();
+      engine.playSuccessChime();
+      engine.playErrorBuzz();
+      engine.playCompletionFanfare();
+    }).not.toThrow();
+  });
 });

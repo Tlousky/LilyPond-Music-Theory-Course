@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { UserState } from '../../lib/gamification/UserProgressStore';
-import { InstrumentType } from '../../lib/audio/SoundFontAudioEngine';
-import { Flame, Award, BookOpen, Music, Code2, RotateCcw } from 'lucide-react';
+import { InstrumentType, audioEngine } from '../../lib/audio/SoundFontAudioEngine';
+import { Flame, Award, BookOpen, Music, Code2, RotateCcw, Volume2, VolumeX } from 'lucide-react';
 
 interface HeaderProps {
   userState: UserState;
@@ -20,6 +20,15 @@ export const Header: React.FC<HeaderProps> = ({
   onChangeInstrument,
   onResetProgress,
 }) => {
+  const [sfxMuted, setSfxMuted] = useState<boolean>(audioEngine.getSfxMuted());
+
+  const handleToggleSfx = () => {
+    const nextMuted = audioEngine.toggleSfx();
+    setSfxMuted(nextMuted);
+    if (!nextMuted) {
+      audioEngine.playUiClick();
+    }
+  };
   return (
     <header className="sticky top-0 z-50 bg-slate-900/90 backdrop-blur-md border-b border-slate-800 px-4 lg:px-8 py-3 transition-colors">
       <div className="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
@@ -103,6 +112,19 @@ export const Header: React.FC<HeaderProps> = ({
             <span className="text-slate-500">|</span>
             <span className="text-indigo-400 font-bold">{userState.xp} XP</span>
           </div>
+
+          {/* Sound FX Mute/Unmute */}
+          <button
+            onClick={handleToggleSfx}
+            title={sfxMuted ? 'Unmute Sound Effects' : 'Mute Sound Effects'}
+            className={`p-1.5 rounded-lg transition-colors ${
+              sfxMuted
+                ? 'text-rose-400 bg-rose-500/10 hover:bg-rose-500/20'
+                : 'text-slate-400 hover:text-white hover:bg-slate-800'
+            }`}
+          >
+            {sfxMuted ? <VolumeX className="w-4 h-4" /> : <Volume2 className="w-4 h-4" />}
+          </button>
 
           {/* Reset progress */}
           <button
