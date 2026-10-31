@@ -1,0 +1,153 @@
+[
+  {
+    "id": "petzold_minuet_g_anh114",
+    "title": "Minuet in G major",
+    "composer": "Christian Petzold / J.S. Bach",
+    "opus": "BWV Anh. 114",
+    "era": "Baroque",
+    "year": 1725,
+    "source": "Notebook for Anna Magdalena Bach (Mutopia / BaroqueMusic.it)",
+    "meter": "3/4",
+    "key": "G major",
+    "clefs": [
+      "treble",
+      "bass"
+    ],
+    "difficulty": 1,
+    "theory_concepts": [
+      "pitch",
+      "clef",
+      "grand_staff",
+      "major_scale",
+      "key_signature",
+      "triple_meter"
+    ],
+    "lilypond_syntax": [
+      "relative_mode",
+      "clef_command",
+      "key_command",
+      "time_command",
+      "piano_staff_context"
+    ],
+    "excerpt_measures": "1-8",
+    "score_file": "petzold_minuet_g_anh114.ly"
+  },
+  {
+    "id": "beethoven_ode_to_joy",
+    "title": "Ode to Joy (Theme)",
+    "composer": "Ludwig van Beethoven",
+    "opus": "Symphony No. 9, Op. 125 (4th Mvt)",
+    "era": "Classical / Romantic",
+    "year": 1824,
+    "source": "Mutopia Project",
+    "meter": "4/4",
+    "key": "D major",
+    "clefs": [
+      "treble"
+    ],
+    "difficulty": 1,
+    "theory_concepts": [
+      "pitch",
+      "stepwise_motion",
+      "quarter_note",
+      "dotted_note",
+      "simple_meter"
+    ],
+    "lilypond_syntax": [
+      "relative_mode",
+      "key_command",
+      "time_command",
+      "dot_modifier"
+    ],
+    "excerpt_measures": "1-8",
+    "score_file": "beethoven_ode_to_joy.ly"
+  },
+  {
+    "id": "mozart_twinkle_variations",
+    "title": "Ah! vous dirai-je, Maman (Theme)",
+    "composer": "Wolfgang Amadeus Mozart",
+    "opus": "KV 265 (300e)",
+    "era": "Classical",
+    "year": 1781,
+    "source": "Mutopia Project",
+    "meter": "2/4",
+    "key": "C major",
+    "clefs": [
+      "treble",
+      "bass"
+    ],
+    "difficulty": 1,
+    "theory_concepts": [
+      "pitch",
+      "repeated_notes",
+      "intervals",
+      "tonic_dominant"
+    ],
+    "lilypond_syntax": [
+      "relative_mode",
+      "piano_staff_context",
+      "time_command"
+    ],
+    "excerpt_measures": "1-8",
+    "score_file": "mozart_twinkle_variations.ly"
+  },
+  {
+    "id": "bach_chorale_bwv244",
+    "title": "O Haupt voll Blut und Wunden",
+    "composer": "Johann Sebastian Bach",
+    "opus": "BWV 244 (No. 54)",
+    "era": "Baroque",
+    "year": 1727,
+    "source": "St. Matthew Passion (BaroqueMusic.it / Mutopia)",
+    "meter": "4/4",
+    "key": "D minor",
+    "clefs": [
+      "treble",
+      "bass"
+    ],
+    "difficulty": 2,
+    "theory_concepts": [
+      "satb",
+      "voice_leading",
+      "triad",
+      "inversion",
+      "cadence"
+    ],
+    "lilypond_syntax": [
+      "voice_separator",
+      "voice_one",
+      "voice_two",
+      "piano_staff_context"
+    ],
+    "excerpt_measures": "1-4",
+    "score_file": "bach_chorale_bwv244.ly"
+  },
+  {
+    "id": "pachelbel_canon_d_bass",
+    "title": "Canon in D major (Ground Bass)",
+    "composer": "Johann Pachelbel",
+    "opus": "PWC 37",
+    "era": "Baroque",
+    "year": 1694,
+    "source": "BaroqueMusic.it",
+    "meter": "4/4",
+    "key": "D major",
+    "clefs": [
+      "bass"
+    ],
+    "difficulty": 1,
+    "theory_concepts": [
+      "ground_bass",
+      "harmonic_progression",
+      "roman_numerals",
+      "basso_continuo"
+    ],
+    "lilypond_syntax": [
+      "clef_command",
+      "relative_mode",
+      "figured_bass_context"
+    ],
+    "excerpt_measures": "1-2",
+    "score_file": "pachelbel_canon_d_bass.ly"
+  }
+]
