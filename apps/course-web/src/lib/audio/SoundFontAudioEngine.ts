@@ -64,22 +64,96 @@ export class SoundFontAudioEngine {
   private activeVoices: Map<number, { stop: () => void }> = new Map();
   private midiAccess: MIDIAccess | null = null;
   private midiListeners: Set<(midi: number, velocity: number) => void> = new Set();
+  private sampleBuffers: Map<string, AudioBuffer> = new Map();
+  private sampleLoadingPromises: Map<string, Promise<AudioBuffer | null>> = new Map();
 
   constructor() {
     // AudioContext is initialized lazily upon user gesture
   }
 
   public init() {
+    if (typeof window === 'undefined') return;
     if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+      if (!AudioCtx) return;
       this.ctx = new AudioCtx();
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(0.7, this.ctx.currentTime);
       this.masterGain.connect(this.ctx.destination);
+      this.preloadMetronomeSamples();
     }
-    if (this.ctx.state === 'suspended') {
+    if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume();
     }
+  }
+
+  public async loadSample(name: string, url: string): Promise<AudioBuffer | null> {
+    if (typeof window === 'undefined' || typeof fetch === 'undefined') return null;
+    if (this.sampleBuffers.has(name)) return this.sampleBuffers.get(name)!;
+    if (this.sampleLoadingPromises.has(name)) return this.sampleLoadingPromises.get(name)!;
+
+    const promise = (async () => {
+      try {
+        if (!this.ctx) {
+          const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+          if (!AudioCtx) return null;
+          this.ctx = new AudioCtx();
+        }
+        const res = await fetch(url);
+        const arrayBuf = await res.arrayBuffer();
+        const audioBuf = await this.ctx.decodeAudioData(arrayBuf);
+        this.sampleBuffers.set(name, audioBuf);
+        return audioBuf;
+      } catch (e) {
+        console.warn(`Could not load audio sample ${name} from ${url}:`, e);
+        return null;
+      }
+    })();
+
+    this.sampleLoadingPromises.set(name, promise);
+    return promise;
+  }
+
+  private preloadMetronomeSamples() {
+    this.loadSample('metronome_high', '/sounds/metronome_high.wav');
+    this.loadSample('metronome_low', '/sounds/metronome_low.wav');
+  }
+
+  public playMetronomeBeat(isDownbeat: boolean = false, volume: number = 0.8): void {
+    this.init();
+    if (!this.ctx || !this.masterGain) return;
+
+    const sampleName = isDownbeat ? 'metronome_high' : 'metronome_low';
+    const buf = this.sampleBuffers.get(sampleName);
+    const now = this.ctx.currentTime;
+
+    if (buf) {
+      const source = this.ctx.createBufferSource();
+      source.buffer = buf;
+      const gain = this.ctx.createGain();
+      gain.gain.setValueAtTime(volume * (isDownbeat ? 1.0 : 0.75), now);
+      source.connect(gain);
+      gain.connect(this.masterGain);
+      source.start(now);
+      return;
+    }
+
+    // High-definition procedural fallback if sample is loading or offline
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    gain.connect(this.masterGain);
+
+    osc.type = isDownbeat ? 'triangle' : 'sine';
+    const startFreq = isDownbeat ? 1800 : 1000;
+    osc.frequency.setValueAtTime(startFreq, now);
+    osc.frequency.exponentialRampToValueAtTime(100, now + 0.04);
+
+    gain.gain.setValueAtTime(volume * (isDownbeat ? 0.9 : 0.6), now);
+    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.04);
+
+    osc.connect(gain);
+    osc.start(now);
+    osc.stop(now + 0.04);
   }
 
   public setInstrument(inst: InstrumentType) {
@@ -112,18 +186,7 @@ export class SoundFontAudioEngine {
     voiceGain.connect(this.masterGain);
 
     if (inst === 'metronome') {
-      // Crisp woodblock click
-      const osc = this.ctx.createOscillator();
-      osc.type = 'triangle';
-      osc.frequency.setValueAtTime(1200, now);
-      osc.frequency.exponentialRampToValueAtTime(100, now + 0.05);
-
-      voiceGain.gain.setValueAtTime(velocity * 0.9, now);
-      voiceGain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
-
-      osc.connect(voiceGain);
-      osc.start(now);
-      osc.stop(now + 0.05);
+      this.playMetronomeBeat(midi >= 80, velocity);
       return;
     }
 

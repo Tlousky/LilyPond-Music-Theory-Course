@@ -28,9 +28,10 @@ export const RhythmMetronome: React.FC<RhythmMetronomeProps> = ({ onTapAccuracy 
         setBeat(beatRef.current);
         lastBeatTimeRef.current = performance.now();
 
-        // Accent on beat 1 (velocity 1.0 vs 0.6)
-        const vel = beatRef.current === 1 ? 1.0 : 0.6;
-        audioEngine.playNote(beatRef.current === 1 ? 84 : 76, 0.05, 'metronome', vel);
+        // Accent on beat 1 (downbeat) vs alternate beats (2, 3, 4)
+        const isDownbeat = beatRef.current === 1;
+        const vel = isDownbeat ? 1.0 : 0.7;
+        audioEngine.playMetronomeBeat(isDownbeat, vel);
       }, intervalMs);
     } else {
       if (timerRef.current) clearInterval(timerRef.current);
