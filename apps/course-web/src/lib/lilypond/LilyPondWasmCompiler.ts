@@ -3,6 +3,8 @@
  * Generates vector SVG scores with Emmentaler music glyphs and interactive textedit:// links.
  */
 
+import { renderClefSvg, renderAccidentalSvg } from './MusicGlyphs';
+
 export interface CompileResult {
   ok: boolean;
   pages: string[];
@@ -216,26 +218,17 @@ export class LilyPondWasmCompiler {
     // Initial Bar Line
     svg += `<line x1="30" y1="${staffY}" x2="30" y2="${staffY + 4 * lineSpacing}" class="bar-line"/>`;
 
-    // Clef Glyph
+    // Authentic SMuFL Clef Glyph (Treble, Bass, Alto, Tenor)
     let xOffset = 50;
-    if (data.clef === 'treble') {
-      // Treble clef symbol
-      svg += `<path d="M ${xOffset} ${staffY + 32} C ${xOffset + 8} ${staffY + 28}, ${xOffset + 12} ${staffY + 20}, ${xOffset + 10} ${staffY + 12} C ${xOffset + 8} ${staffY + 4}, ${xOffset - 4} ${staffY + 8}, ${xOffset + 4} ${staffY - 10} L ${xOffset + 5} ${staffY - 20} C ${xOffset + 5} ${staffY - 25}, ${xOffset + 3} ${staffY - 25}, ${xOffset + 3} ${staffY - 18} L ${xOffset + 3} ${staffY + 45} C ${xOffset + 3} ${staffY + 52}, ${xOffset - 3} ${staffY + 52}, ${xOffset - 2} ${staffY + 46}" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round"/>`;
-      svg += `<circle cx="${xOffset + 6}" cy="${staffY + 20}" r="2.5" fill="#f8fafc"/>`;
-      xOffset += 35;
-    } else {
-      // Bass Clef symbol
-      svg += `<path d="M ${xOffset} ${staffY + 20} C ${xOffset} ${staffY + 10}, ${xOffset + 14} ${staffY + 10}, ${xOffset + 14} ${staffY + 20} C ${xOffset + 14} ${staffY + 30}, ${xOffset} ${staffY + 35}, ${xOffset} ${staffY + 40}" fill="none" stroke="#f8fafc" stroke-width="2.5" stroke-linecap="round"/>`;
-      svg += `<circle cx="${xOffset + 18}" cy="${staffY + 14}" r="2" fill="#f8fafc"/>`;
-      svg += `<circle cx="${xOffset + 18}" cy="${staffY + 26}" r="2" fill="#f8fafc"/>`;
-      xOffset += 35;
-    }
+    const clefData = renderClefSvg(data.clef, xOffset, staffY, lineSpacing);
+    svg += clefData.svg;
+    xOffset += clefData.width;
 
     // Time Signature
     const [num, den] = data.timeSig.split('/');
     svg += `<text x="${xOffset}" y="${staffY + 16}" class="score-text" font-weight="bold">${num}</text>`;
     svg += `<text x="${xOffset}" y="${staffY + 36}" class="score-text" font-weight="bold">${den}</text>`;
-    xOffset += 30;
+    xOffset += 32;
 
     // Engrave Notes with Interactive textedit links
     const noteSpacing = Math.min(65, (width - xOffset - 60) / Math.max(1, data.notes.length));
@@ -248,6 +241,13 @@ export class LilyPondWasmCompiler {
       // diatonic step offset approximation
       const diatonicSteps = Math.round(semitoneDist * (7 / 12));
       const noteY = baseC4Y - diatonicSteps * (lineSpacing / 2);
+
+      // Render Accidental if note has sharp or flat
+      if (note.pitch.includes('IS')) {
+        svg += renderAccidentalSvg('sharp', noteX - 11, noteY);
+      } else if (note.pitch.includes('ES')) {
+        svg += renderAccidentalSvg('flat', noteX - 11, noteY);
+      }
 
       // Ledger lines if outside staff
       if (noteY >= staffY + 5 * lineSpacing) {
