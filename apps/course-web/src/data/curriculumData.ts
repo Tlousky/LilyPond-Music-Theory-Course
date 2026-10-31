@@ -30,6 +30,13 @@ export interface Lesson {
   coding_challenge: CodingChallenge;
 }
 
+export interface CapstoneChallenge {
+  question: string;
+  options: string[];
+  answer: number;
+  explanation: string;
+}
+
 export interface RepertoirePiece {
   id: string;
   title: string;
@@ -47,6 +54,7 @@ export interface RepertoirePiece {
   excerpt_measures: string;
   score_file: string;
   code: string;
+  capstone_challenge?: CapstoneChallenge;
 }
 
 export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
@@ -107,7 +115,18 @@ export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
       }
     }
   }
->>`
+>>`,
+    capstone_challenge: {
+      question: "Inspect the score structure: What meter and upper-staff clef does Petzold's Minuet use?",
+      options: [
+        "3/4 triple meter in Treble clef",
+        "4/4 common time in Bass clef",
+        "2/4 duple meter in Alto clef",
+        "6/8 compound meter in Treble clef"
+      ],
+      answer: 0,
+      explanation: "Petzold's Minuet is in 3/4 triple dance meter, with the top melody staff written in Treble clef."
+    }
   },
   "beethoven_ode_to_joy": {
     id: "beethoven_ode_to_joy",
@@ -145,7 +164,18 @@ export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
     d4 d e fis |
     e4. d8 d2 |
   }
-}`
+}`,
+    capstone_challenge: {
+      question: "Examine the score header and key signature: What key and meter does Beethoven's theme use?",
+      options: [
+        "D major in 4/4 common time",
+        "C major in 3/4 waltz time",
+        "G major in 2/4 march time",
+        "F major in 6/8 compound time"
+      ],
+      answer: 0,
+      explanation: "The score specifies \\key d \\major (with two sharps: F# and C#) and \\time 4/4."
+    }
   },
   "mozart_twinkle_variations": {
     id: "mozart_twinkle_variations",
@@ -188,7 +218,18 @@ export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
       <c f a>2 | <c e g> | <g b d f> | <c e g>2 |
     }
   }
->>`
+>>`,
+    capstone_challenge: {
+      question: "Examine the engraved score: What time signature (meter) is specified right after the clef in measure 1?",
+      options: [
+        "2/4 (Duple meter: 2 quarter-note beats per measure)",
+        "3/4 (Triple meter: 3 quarter-note beats per measure)",
+        "4/4 (Common time: 4 quarter-note beats per measure)",
+        "6/8 (Compound meter: 2 dotted-beat pulses)"
+      ],
+      answer: 0,
+      explanation: "The score specifies \\time 2/4, dividing each measure into two quarter notes."
+    }
   },
   "bach_chorale_bwv244": {
     id: "bach_chorale_bwv244",
@@ -237,7 +278,18 @@ export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
       >>
     }
   >>
->>`
+>>`,
+    capstone_challenge: {
+      question: "Observe the vocal harmony layout: What context is used to combine both soprano and bass staves?",
+      options: [
+        "\\new PianoStaff with two polyphonic staves",
+        "\\new DrumStaff with single line",
+        "\\new ChordNames only",
+        "\\new TabStaff for guitar"
+      ],
+      answer: 0,
+      explanation: "Bach's four-part chorale is engraved using a \\new PianoStaff holding both Treble and Bass staves."
+    }
   },
   "pachelbel_canon_d_bass": {
     id: "pachelbel_canon_d_bass",
@@ -274,7 +326,18 @@ export const REPERTOIRE_PIECES: Record<string, RepertoirePiece> = {
     < _ >4 < _ > < _ > < _ > |
     < _ >4 < _ > < _ > < _ > |
   }
->>`
+>>`,
+    capstone_challenge: {
+      question: "Examine the bass accompaniment: Which clef is assigned to Pachelbel's repeating ground bass?",
+      options: [
+        "Bass clef (\\clef bass)",
+        "Treble clef (\\clef treble)",
+        "Alto clef (\\clef alto)",
+        "Percussion clef"
+      ],
+      answer: 0,
+      explanation: "The ground bass continuo line is written in Bass clef (\\clef bass) to support the harmonic foundation."
+    }
   }
 };
 
