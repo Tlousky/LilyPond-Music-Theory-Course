@@ -71,14 +71,17 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
             >
               <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
                 <div className="flex items-start gap-4">
-                  {/* Status Circle */}
-                  <div
-                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-md ${
+                  {/* Status Circle / Play Button */}
+                  <button
+                    disabled={!isUnlocked}
+                    onClick={() => isUnlocked && onSelectLesson(lesson)}
+                    aria-label={isCompleted ? `Review ${lesson.title}` : `Start ${lesson.title}`}
+                    className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 shadow-md transition-transform ${
                       isCompleted
-                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30'
+                        ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 hover:scale-105 cursor-pointer'
                         : isUnlocked
-                        ? 'bg-indigo-600 text-white animate-pulse'
-                        : 'bg-slate-800 text-slate-500 border border-slate-700'
+                        ? 'bg-indigo-600 text-white animate-pulse hover:animate-none hover:bg-indigo-500 hover:scale-110 cursor-pointer shadow-indigo-600/50'
+                        : 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
                     }`}
                   >
                     {isCompleted ? (
@@ -88,14 +91,18 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
                     ) : (
                       <Lock className="w-5 h-5" />
                     )}
-                  </div>
+                  </button>
 
                   {/* Title & Concept info */}
                   <div>
                     <div className="flex items-center gap-2">
-                      <h3 className="text-base font-bold text-white hover:text-indigo-400 transition-colors">
+                      <button
+                        disabled={!isUnlocked}
+                        onClick={() => isUnlocked && onSelectLesson(lesson)}
+                        className="text-left text-base font-bold text-white hover:text-indigo-400 transition-colors disabled:hover:text-white"
+                      >
                         {lesson.title}
-                      </h3>
+                      </button>
                       {isCompleted && (
                         <span className="flex items-center gap-1 bg-amber-500/20 text-amber-300 text-[11px] px-2 py-0.5 rounded-full font-bold">
                           <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
