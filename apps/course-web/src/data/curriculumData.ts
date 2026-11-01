@@ -445,7 +445,7 @@ export const FUNDAMENTALS_LESSONS: Lesson[] = [
       prompt: "Write your first LilyPond score! Engrave four quarter notes: C, D, E, F in treble clef using \\relative c'.",
       initial_code: `\\version "2.24.0"
 \\relative c' {
-  % Type: c4 d e f
+  % Enter four ascending quarter notes from Middle C:
   
 }`,
       solution_code: `\\version "2.24.0"
@@ -538,7 +538,7 @@ The piano keyboard consists of alternating groups of **two** and **three** black
       prompt: "Reconstruct your first LilyPond score! Add notes c4, d, e, f inside the \\relative block.",
       scaffoldCode: `\\version "2.24.0"
 \\relative c' {
-  % Add four quarter notes: c4 d e f
+  % Add four ascending quarter notes starting from Middle C:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -567,7 +567,7 @@ The piano keyboard consists of alternating groups of **two** and **three** black
 \\relative c' {
   \\clef treble
   \\time 2/4
-  % Write: c4 c | g' g | a a | g2 |
+  % Write the four opening measures (C-C, G-G, A-A, G):
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -617,7 +617,7 @@ The piano keyboard consists of alternating groups of **two** and **three** black
       initial_code: `\\version "2.24.0"
 \\relative c' {
   \\clef treble
-  % Write: c4 d e f g1
+  % Write four quarter notes stepping up from Middle C, ending with a whole note G:
   
 }`,
       solution_code: `\\version "2.24.0"
@@ -720,7 +720,7 @@ When pitches are too high or too low to fit on the 5-line staff, small horizonta
       scaffoldCode: `\\version "2.24.0"
 \\relative c' {
   \\clef treble
-  % Complete the scale: c4 d e f | g1 |
+  % Complete the ascending scale to whole note G:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -751,7 +751,7 @@ When pitches are too high or too low to fit on the 5-line staff, small horizonta
   \\clef treble
   \\key d \\major
   \\time 4/4
-  % Write: fis4 fis g a | a g fis e |
+  % Write Beethoven's opening phrase across two measures:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -961,7 +961,7 @@ $$\\mathbf{A2 \\rightarrow C3 \\rightarrow E3 \\rightarrow G3}$$
   \\clef treble
   \\key g \\major
   \\time 3/4
-  % Write: d4 g,8 a b c | d4 g, g |
+  % Write Petzold's opening motif across two measures:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -1175,7 +1175,7 @@ It is the exact same pitch (261.6 Hz) and the exact same physical white key on t
     \\clef bass
     \\key g \\major
     \\time 3/4
-    % Add dotted half chord <g b d>2. in relative c:
+    % Add the G major root-position dotted-half chord:
     \\relative c {
       
     }
@@ -1340,7 +1340,7 @@ A **whole step** is equal to **two half steps**. There is always exactly one key
       scaffoldCode: `\\version "2.24.0"
 \\relative c' {
   \\clef treble
-  % Write c4 cis d ees | e1 |
+  % Write the chromatic progression (C, C#, D, Eb, E):
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -1371,7 +1371,7 @@ A **whole step** is equal to **two half steps**. There is always exactly one key
   \\clef treble
   \\key d \\minor
   \\time 4/4
-  % Write: f4 e d cis | d2 |
+  % Write Bach's expressive phrase ending with the C-sharp leading tone:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -1522,7 +1522,7 @@ $$\\text{Dotted Quarter (4.)} = 1 + 0.5 = 1.5 \\text{ beats (equal to 3 eighth n
 {
   \\clef treble
   \\time 4/4
-  % Write: c'4. d'8 r2 |
+  % Write a dotted quarter note on C, eighth note on D, and a half rest:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -1553,7 +1553,7 @@ $$\\text{Dotted Quarter (4.)} = 1 + 0.5 = 1.5 \\text{ beats (equal to 3 eighth n
   \\clef treble
   \\key d \\major
   \\time 4/4
-  % Write: fis4. e8 e2 |
+  % Write Beethoven's dotted cadence (F# dotted quarter, E eighth, E half note):
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -1702,7 +1702,7 @@ In a **simple meter**, each individual beat divides naturally into **two equal p
       scaffoldCode: `\\version "2.24.0"
 \\relative c' {
   \\clef treble
-  % Add \\time 3/4 and write c4 d e | f2. |
+  % Set the meter to 3/4 and write the two measures:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -2079,7 +2079,7 @@ To determine an interval's generic size, count the letter names inclusive from t
 \\relative c' {
   \\clef treble
   \\time 4/4
-  % Write <c e>2 <c g>2 |
+  % Write a harmonic major third (C-E) followed by a perfect fifth (C-G) in half notes:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -2284,7 +2284,7 @@ The quality of a triad is determined by the specific intervals stacked:
 \\relative c' {
   \\clef treble
   \\time 4/4
-  % Write: <d f a>2 <cis e a>2 |
+  % Write the opening D minor triad followed by the A major dominant chord:
   
 }`,
       solutionCode: `\\version "2.24.0"
@@ -2338,7 +2338,7 @@ The quality of a triad is determined by the specific intervals stacked:
     e2
   }
   \\figures {
-    % Add figure 6:
+    % Add the first inversion figure for half-note duration:
     
   }
 >>`,
@@ -2442,7 +2442,7 @@ In the Baroque era (Bach, Handel, Vivaldi), composers wrote only the bass line a
     e2
   }
   \\figures {
-    % Add figure 6:
+    % Add the first inversion figure for half-note duration:
     
   }
 >>`,
@@ -2534,7 +2534,7 @@ In the Baroque era (Bach, Handel, Vivaldi), composers wrote only the bass line a
     <<
       { d4 c2 }  % Voice 1 (Soprano)
       \\\\
-      % Voice 2 (Alto) b4 c2:
+      % Enter Voice 2 (Alto voice block):
       
     >>
   }
@@ -2643,7 +2643,7 @@ Classical harmony is traditionally voiced for a four-part choir:
     <<
       { d4 c2 }
       \\\\
-      % Add Voice 2: { b4 c2 }
+      % Enter Voice 2 (lower voice block):
       
     >>
   }
@@ -2685,7 +2685,7 @@ Classical harmony is traditionally voiced for a four-part choir:
     <<
       { f4 e d2 }
       \\\\
-      % Write Alto voice: { d4 cis a2 }
+      % Enter the lower Alto voice block resolving to A:
       
     >>
   }

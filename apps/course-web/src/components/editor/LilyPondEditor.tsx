@@ -36,6 +36,11 @@ function ensureLilyPondLanguage() {
         'editorLineNumber.foreground': '#334155',
         'editorCursor.foreground': '#818cf8',
         'editor.selectionBackground': '#312e81',
+        'editorOverviewRuler.background': '#090d16',
+        'editorOverviewRuler.border': '#090d16',
+        'scrollbarSlider.background': '#1e293b80',
+        'scrollbarSlider.hoverBackground': '#334155a0',
+        'scrollbarSlider.activeBackground': '#475569c0',
       },
     });
 
@@ -75,6 +80,17 @@ export const LilyPondEditor: React.FC<LilyPondEditorProps> = ({
         scrollBeyondLastLine: false,
         padding: { top: 12, bottom: 12 },
         wordWrap: 'on',
+        overviewRulerLanes: 0,
+        overviewRulerBorder: false,
+        hideCursorInOverviewRuler: true,
+        scrollbar: {
+          vertical: 'auto',
+          horizontal: 'auto',
+          verticalScrollbarSize: 8,
+          horizontalScrollbarSize: 8,
+          verticalHasArrows: false,
+          horizontalHasArrows: false,
+        },
       });
 
       editorRef.current.onDidChangeModelContent(() => {

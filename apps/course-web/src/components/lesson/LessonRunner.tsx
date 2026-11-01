@@ -81,6 +81,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   const [capstoneReflectionSubmitted, setCapstoneReflectionSubmitted] = useState<boolean>(false);
   const [capstoneUnlocked, setCapstoneUnlocked] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
+  const [showCapstoneHint, setShowCapstoneHint] = useState<boolean>(false);
 
   const activeTimersRef = useRef<number[]>([]);
 
@@ -103,6 +104,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     setCapstoneReflectionSelected(null);
     setCapstoneReflectionSubmitted(false);
     setCapstoneUnlocked(false);
+    setShowCapstoneHint(false);
 
     const initialCode = lesson.capstone?.initialCode || lesson.coding_challenge.initial_code;
     lilypondCompiler.compile(initialCode).then(setCapstoneCompileResult);
@@ -740,7 +742,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
             <div className="space-y-6">
               <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex items-start gap-3">
                 <Lightbulb className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
-                <div className="text-xs text-slate-300 leading-relaxed space-y-1">
+                <div className="text-xs text-slate-300 leading-relaxed space-y-1 flex-1">
                   <p>
                     <strong>Step 5A: Write the Master Score:</strong> {lesson.capstone?.codePrompt || 'Engrave the classical piece in LilyPond.'}
                   </p>
@@ -748,7 +750,31 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                     Once compiled and verified, switch to <strong>Step 5B</strong> to perform your masterpiece on the virtual keyboard!
                   </p>
                 </div>
+                {(lesson.capstone?.hint || lesson.coding_challenge.hint) && (
+                  <button
+                    onClick={() => setShowCapstoneHint(!showCapstoneHint)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold shrink-0 transition-all ${
+                      showCapstoneHint
+                        ? 'bg-amber-500 text-slate-950 font-bold'
+                        : 'bg-slate-800 hover:bg-slate-700 text-amber-300'
+                    }`}
+                  >
+                    {showCapstoneHint ? 'Hide Hint' : 'Need a Hint?'}
+                  </button>
+                )}
               </div>
+
+              {showCapstoneHint && (lesson.capstone?.hint || lesson.coding_challenge.hint) && (
+                <div className="bg-amber-500/10 p-3.5 rounded-xl border border-amber-500/30 text-xs text-amber-200 flex items-start gap-2.5">
+                  <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+                  <div>
+                    <span className="font-bold uppercase tracking-wider text-[11px] text-amber-300 block mb-0.5">
+                      Hint:
+                    </span>
+                    <p>{lesson.capstone?.hint || lesson.coding_challenge.hint}</p>
+                  </div>
+                </div>
+              )}
 
               {/* Grader Diagnostics Alert */}
               {capstoneGradeResult && (
@@ -779,7 +805,7 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
               {/* Dual-Pane Editor & Live SVG Preview */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[420px]">
-                <div className="space-y-3">
+                <div className="flex flex-col h-full space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       LilyPond Code Editor
@@ -791,18 +817,20 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                       Check & Grade Code
                     </button>
                   </div>
-                  <LilyPondEditor
-                    code={capstoneCode}
-                    onChange={(newCode) => {
-                      setCapstoneCode(newCode);
-                      handleCompileCapstone(newCode);
-                    }}
-                    onCompile={() => handleCompileCapstone(capstoneCode)}
-                    isCompiling={isCompilingCapstone}
-                  />
+                  <div className="flex-1 flex flex-col min-h-[360px]">
+                    <LilyPondEditor
+                      code={capstoneCode}
+                      onChange={(newCode) => {
+                        setCapstoneCode(newCode);
+                        handleCompileCapstone(newCode);
+                      }}
+                      onCompile={() => handleCompileCapstone(capstoneCode)}
+                      isCompiling={isCompilingCapstone}
+                    />
+                  </div>
                 </div>
 
-                <div className="space-y-3">
+                <div className="flex flex-col h-full space-y-3">
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
                       Live Engraved Preview
@@ -827,13 +855,15 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                     </div>
                   </div>
 
-                  <ScorePreview
-                    svgPages={capstoneCompileResult ? capstoneCompileResult.pages : []}
-                    logs={capstoneCompileResult ? capstoneCompileResult.logs : []}
-                    isPlaying={isCapstonePlaying}
-                    onPlayAudio={handlePlayCapstoneScore}
-                    onStopAudio={handleStopCapstoneScore}
-                  />
+                  <div className="flex-1 flex flex-col min-h-[360px]">
+                    <ScorePreview
+                      svgPages={capstoneCompileResult ? capstoneCompileResult.pages : []}
+                      logs={capstoneCompileResult ? capstoneCompileResult.logs : []}
+                      isPlaying={isCapstonePlaying}
+                      onPlayAudio={handlePlayCapstoneScore}
+                      onStopAudio={handleStopCapstoneScore}
+                    />
+                  </div>
                 </div>
               </div>
 

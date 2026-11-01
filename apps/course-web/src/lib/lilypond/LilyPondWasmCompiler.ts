@@ -190,7 +190,7 @@ export class LilyPondWasmCompiler {
     const staffY = data.title ? 140 : 80;
     const lineSpacing = 10;
 
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" class="lilypond-score">`;
+    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="auto" class="lilypond-score">`;
     svg += `<defs>
       <style>
         .staff-line { stroke: #e2e8f0; stroke-width: 1.2; }

@@ -48,7 +48,7 @@ export const ScorePreview: React.FC<ScorePreviewProps> = ({
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
+    <div className="flex flex-col flex-1 h-full min-h-[360px] bg-slate-950 border border-slate-800 rounded-xl overflow-hidden shadow-lg">
       {/* Header bar */}
       <div className="bg-slate-900 border-b border-slate-800 px-4 py-2.5 flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -83,20 +83,20 @@ export const ScorePreview: React.FC<ScorePreviewProps> = ({
       <div
         ref={containerRef}
         onClick={handleClick}
-        className="flex-1 overflow-auto p-4 flex flex-col items-center justify-center score-container min-h-[260px] bg-slate-900/40"
+        className="flex-1 overflow-auto p-4 flex flex-col items-center justify-center score-container min-h-[280px] bg-slate-900/40"
       >
         {svgPages.length > 0 ? (
           svgPages.map((pageSvg, idx) => (
             <div
               key={idx}
-              className="w-full max-w-2xl bg-slate-900 rounded-lg p-2 shadow-inner border border-slate-800/80"
+              className="w-full max-w-2xl bg-slate-900 rounded-lg p-3 shadow-inner border border-slate-800/80 flex items-center justify-center [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-[300px]"
               dangerouslySetInnerHTML={{ __html: pageSvg }}
             />
           ))
         ) : (
           <div className="text-center py-12 text-slate-500 text-sm">
-            <p>Score has not been engraved yet.</p>
-            <p className="text-xs text-slate-600 mt-1">Click "Run Score" to compile.</p>
+            <p className="font-semibold text-slate-400">Score preview ready</p>
+            <p className="text-xs text-slate-500 mt-1">Click "Run Score" or edit code to compile.</p>
           </div>
         )}
       </div>

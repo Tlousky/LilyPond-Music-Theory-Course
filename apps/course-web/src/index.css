@@ -260,3 +260,15 @@ code, pre, .font-mono {
   font-size: 0.9em;
 }
 
+/* Monaco Editor decorations overview ruler hiding & dark scrollbar styling */
+.monaco-editor .decorationsOverviewRuler {
+  display: none !important;
+  width: 0 !important;
+  background: transparent !important;
+}
+
+.monaco-editor .monaco-scrollable-element > .scrollbar > .slider {
+  background: rgba(51, 65, 85, 0.5) !important;
+  border-radius: 4px;
+}
+

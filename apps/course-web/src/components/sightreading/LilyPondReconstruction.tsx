@@ -12,6 +12,7 @@ import {
   AlertCircle,
   Sparkles,
   BookOpen,
+  Lightbulb,
   Layers,
   FileCode,
   RotateCcw,
@@ -41,6 +42,8 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
   const [targetCompileResult, setTargetCompileResult] = useState<CompileResult | null>(null);
   const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
   const [showDocs, setShowDocs] = useState<boolean>(false);
+  const [showHints, setShowHints] = useState<boolean>(false);
+  const [revealedHintCount, setRevealedHintCount] = useState<number>(1);
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
 
   // Compile target score and initial user code
@@ -55,6 +58,8 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
     setUserCode(initialCode);
     runCompile(initialCode);
     setGradeResult(null);
+    setShowHints(false);
+    setRevealedHintCount(1);
   }, [exercise.id, difficulty]);
 
   const runCompile = async (codeToCompile: string) => {
@@ -62,6 +67,27 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
     const res = await lilypondCompiler.compile(codeToCompile);
     setUserCompileResult(res);
     setIsCompiling(false);
+  };
+
+  const handlePlayAudio = () => {
+    if (!userCompileResult || userCompileResult.midiNotes.length === 0) return;
+    setIsPlayingAudio(true);
+    const notes = userCompileResult.midiNotes;
+    let currTime = 0;
+    notes.forEach((n, idx) => {
+      const durSec = (60 / exercise.tempoBpm) * (4 / (n.duration || 4));
+      setTimeout(() => {
+        audioEngine.playNote(n.midi, 0.7);
+        if (idx === notes.length - 1) {
+          setTimeout(() => setIsPlayingAudio(false), durSec * 1000);
+        }
+      }, currTime * 1000);
+      currTime += durSec;
+    });
+  };
+
+  const handleStopAudio = () => {
+    setIsPlayingAudio(false);
   };
 
   const handleDifficultyChange = (diff: ReconstructionDifficulty) => {
@@ -155,6 +181,18 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
 
           <div className="flex items-center gap-2">
             <button
+              onClick={() => setShowHints(!showHints)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                showHints
+                  ? 'bg-amber-500 text-slate-950 font-extrabold shadow-sm'
+                  : 'bg-slate-800 hover:bg-slate-700 text-amber-300'
+              }`}
+            >
+              <Lightbulb className="w-3.5 h-3.5" />
+              <span>{showHints ? 'Hide Hints' : 'Hints'}</span>
+            </button>
+
+            <button
               onClick={() => setShowDocs(!showDocs)}
               className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
                 showDocs
@@ -235,6 +273,46 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
                 <p className="text-[11px] text-slate-400">Durations are remembered until changed. Use pipe '|' for bar lines.</p>
               </div>
             </div>
+          </div>
+        )}
+
+        {/* Progressive Hint Drawer */}
+        {showHints && exercise.theoryTips && exercise.theoryTips.length > 0 && (
+          <div className="bg-amber-500/10 p-4 rounded-xl border border-amber-500/30 text-xs space-y-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 text-amber-400 font-bold uppercase tracking-wider text-[11px]">
+                <Lightbulb className="w-3.5 h-3.5" />
+                <span>Exercise Hints & Guidance</span>
+              </div>
+              <span className="text-[11px] text-amber-300/80 font-mono">
+                Showing {Math.min(revealedHintCount, exercise.theoryTips.length)} of {exercise.theoryTips.length}
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              {exercise.theoryTips.slice(0, revealedHintCount).map((tip, idx) => (
+                <div key={idx} className="bg-slate-900/90 p-3 rounded-lg border border-amber-500/20 text-slate-200 flex items-start gap-2.5">
+                  <span className="bg-amber-500/20 text-amber-300 px-1.5 py-0.5 rounded text-[10px] font-bold shrink-0">
+                    Hint {idx + 1}
+                  </span>
+                  <p className="text-xs leading-relaxed">{tip}</p>
+                </div>
+              ))}
+            </div>
+
+            {revealedHintCount < exercise.theoryTips.length && (
+              <div className="flex justify-end pt-1">
+                <button
+                  onClick={() => {
+                    audioEngine.playUiClick();
+                    setRevealedHintCount((c) => c + 1);
+                  }}
+                  className="px-3 py-1 bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/30 rounded-lg text-xs font-semibold transition-colors"
+                >
+                  Reveal Next Hint ({exercise.theoryTips.length - revealedHintCount} remaining)
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -325,10 +403,10 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
         )}
 
         {/* Dual-Pane Editor & Your Live Engraving */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[380px]">
-          <div className="space-y-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[420px]">
+          <div className="flex flex-col h-full space-y-2">
             <div className="flex items-center justify-between text-xs text-slate-400 px-1">
-              <span>Your Reconstructed LilyPond Code:</span>
+              <span className="font-semibold">Your Reconstructed LilyPond Code:</span>
               <button
                 onClick={handleCheckCode}
                 className="px-4 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-xs rounded-lg shadow-md transition-all"
@@ -336,26 +414,30 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
                 Check Reconstruction
               </button>
             </div>
-            <LilyPondEditor
-              code={userCode}
-              onChange={(newCode) => {
-                setUserCode(newCode);
-                runCompile(newCode);
-              }}
-              onCompile={() => runCompile(userCode)}
-              isCompiling={isCompiling}
-            />
+            <div className="flex-1 flex flex-col min-h-[360px]">
+              <LilyPondEditor
+                code={userCode}
+                onChange={(newCode) => {
+                  setUserCode(newCode);
+                  runCompile(newCode);
+                }}
+                onCompile={() => runCompile(userCode)}
+                isCompiling={isCompiling}
+              />
+            </div>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-xs text-slate-400 px-1">Your Live Compiled Score Preview:</span>
-            <ScorePreview
-              svgPages={userCompileResult ? userCompileResult.pages : []}
-              logs={userCompileResult ? userCompileResult.logs : []}
-              isPlaying={isPlayingAudio}
-              onPlayAudio={() => setIsPlayingAudio(true)}
-              onStopAudio={() => setIsPlayingAudio(false)}
-            />
+          <div className="flex flex-col h-full space-y-2">
+            <span className="text-xs text-slate-400 px-1 font-semibold">Your Live Compiled Score Preview:</span>
+            <div className="flex-1 flex flex-col min-h-[360px]">
+              <ScorePreview
+                svgPages={userCompileResult ? userCompileResult.pages : []}
+                logs={userCompileResult ? userCompileResult.logs : []}
+                isPlaying={isPlayingAudio}
+                onPlayAudio={handlePlayAudio}
+                onStopAudio={handleStopAudio}
+              />
+            </div>
           </div>
         </div>
 

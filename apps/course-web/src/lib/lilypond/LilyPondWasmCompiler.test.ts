@@ -61,4 +61,17 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
     expect(result.midiNotes[1].pitch).toBe('CIS4');
     expect(result.midiNotes[3].pitch).toBe('EES4');
   });
+
+  it('compiles snippet from issue 12 with full width and responsive attributes', async () => {
+    const src = `\\version "2.24.0"
+\\relative c' {
+  c4 d e f
+}`;
+    const result = await lilypondCompiler.compile(src);
+    expect(result.ok).toBe(true);
+    expect(result.pages.length).toBe(1);
+    expect(result.midiNotes.length).toBe(4);
+    expect(result.pages[0]).toContain('width="100%"');
+    expect(result.pages[0]).toContain('height="auto"');
+  });
 });

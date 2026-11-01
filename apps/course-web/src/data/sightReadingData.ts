@@ -40,7 +40,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
 \\relative c' {
   \\clef treble
   \\time 4/4
-  c4 d e f | % Add measure 2: g4 f e c
+  c4 d e f | % Complete measure 2 stepping downward:
   
 }`,
     theoryTips: [
@@ -69,7 +69,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
 \\relative c'' {
   \\clef treble
   \\time 4/4
-  f4 e d c | % Complete measure 2: a'4 g f2
+  f4 e d c | % Complete measure 2 in the upper register:
   
 }`,
     theoryTips: [
@@ -98,7 +98,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
 \\relative c {
   \\clef bass
   \\time 4/4
-  c4 d e f | % Add measure 2: g4 e d c
+  c4 d e f | % Complete measure 2 resolving to low C:
   
 }`,
     theoryTips: [
@@ -127,7 +127,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
 \\relative c' {
   \\clef treble
   \\time 3/4
-  c4 e g | % Write measures 2-3: f4 d b | c2. |
+  c4 e g | % Write measures 2 and 3 in 3/4 meter:
   
 }`,
     theoryTips: [
@@ -190,7 +190,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
   \\clef bass
   \\key d \\major
   \\time 4/4
-  d4 a b fis | % Complete measure 2: g4 d g a
+  d4 a b fis | % Complete measure 2 with step-wise bass motion:
   
 }`,
     theoryTips: [
@@ -221,7 +221,7 @@ export const SIGHT_READING_EXERCISES: SightReadingExercise[] = [
   \\clef treble
   \\time 2/4
   c4 c | g' g | a a | g2 |
-  % Reconstruct the answering phrase: f4 f | e e | d d | c2 |
+  % Reconstruct the answering 4-measure phrase:
   
 }`,
     theoryTips: [
