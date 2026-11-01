@@ -130,13 +130,14 @@ export class SoundFontAudioEngine {
   }
 
   private preloadAllSamples() {
-    this.loadSample('metronome_high', '/sounds/metronome_high.wav');
-    this.loadSample('metronome_low', '/sounds/metronome_low.wav');
-    this.loadSample('ui_click', '/sounds/ui_click.wav');
-    this.loadSample('ui_select', '/sounds/ui_select.wav');
-    this.loadSample('ui_success', '/sounds/ui_success.wav');
-    this.loadSample('ui_error', '/sounds/ui_error.wav');
-    this.loadSample('ui_complete', '/sounds/ui_complete.wav');
+    const base = import.meta.env.BASE_URL?.endsWith('/') ? import.meta.env.BASE_URL : `${import.meta.env.BASE_URL || ''}/`;
+    this.loadSample('metronome_high', `${base}sounds/metronome_high.wav`);
+    this.loadSample('metronome_low', `${base}sounds/metronome_low.wav`);
+    this.loadSample('ui_click', `${base}sounds/ui_click.wav`);
+    this.loadSample('ui_select', `${base}sounds/ui_select.wav`);
+    this.loadSample('ui_success', `${base}sounds/ui_success.wav`);
+    this.loadSample('ui_error', `${base}sounds/ui_error.wav`);
+    this.loadSample('ui_complete', `${base}sounds/ui_complete.wav`);
   }
 
   public playSample(name: string, volume: number = 0.5): boolean {

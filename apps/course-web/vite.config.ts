@@ -4,6 +4,7 @@ import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 
 export default defineConfig({
+  base: process.env.BASE_URL || '/LilyPond-Music-Theory-Course/',
   plugins: [
     react(),
     tailwindcss(),
