@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { FUNDAMENTALS_LESSONS } from './curriculumData';
 import { SIGHT_READING_EXERCISES } from './sightReadingData';
+import { lilypondCompiler } from '../lib/lilypond/LilyPondWasmCompiler';
 
 describe('Curriculum & Exercise Hints Verification (Issue #11)', () => {
   it('ensures no coding_challenge initial_code contains comment giveaways', () => {
@@ -44,5 +45,17 @@ describe('Curriculum & Exercise Hints Verification (Issue #11)', () => {
         expect(comment).not.toMatch(/%\s*(Type|Write|Add.*:)\s*[a-g]['|,]*[0-9]/i);
       });
     });
+  });
+
+  it('ensures all lesson capstone solution scores compile to valid SVG reference scores (Issue #13)', async () => {
+    for (const lesson of FUNDAMENTALS_LESSONS) {
+      const targetCode = lesson.capstone?.solutionCode || lesson.coding_challenge.solution_code;
+      expect(targetCode).toBeDefined();
+      const res = await lilypondCompiler.compile(targetCode);
+      expect(res.ok).toBe(true);
+      expect(res.pages.length).toBeGreaterThan(0);
+      expect(res.pages[0]).toContain('<svg');
+      expect(res.pages[0]).toContain('class="lilypond-score"');
+    }
   });
 });

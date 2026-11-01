@@ -75,8 +75,10 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   );
   const [isCompilingCapstone, setIsCompilingCapstone] = useState<boolean>(false);
   const [capstoneCompileResult, setCapstoneCompileResult] = useState<CompileResult | null>(null);
+  const [capstoneTargetCompileResult, setCapstoneTargetCompileResult] = useState<CompileResult | null>(null);
   const [capstoneGradeResult, setCapstoneGradeResult] = useState<GradeResult | null>(null);
   const [isCapstonePlaying, setIsCapstonePlaying] = useState<boolean>(false);
+  const [isTargetAudioPlaying, setIsTargetAudioPlaying] = useState<boolean>(false);
   const [capstoneReflectionSelected, setCapstoneReflectionSelected] = useState<number | null>(null);
   const [capstoneReflectionSubmitted, setCapstoneReflectionSubmitted] = useState<boolean>(false);
   const [capstoneUnlocked, setCapstoneUnlocked] = useState<boolean>(false);
@@ -108,12 +110,16 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
     const initialCode = lesson.capstone?.initialCode || lesson.coding_challenge.initial_code;
     lilypondCompiler.compile(initialCode).then(setCapstoneCompileResult);
+
+    const targetCode = lesson.capstone?.solutionCode || lesson.coding_challenge.solution_code;
+    lilypondCompiler.compile(targetCode).then(setCapstoneTargetCompileResult);
   }, [lesson.id]);
 
   // Clean audio timers on stage changes
   useEffect(() => {
     clearAudioTimers();
     setIsCapstonePlaying(false);
+    setIsTargetAudioPlaying(false);
     return () => clearAudioTimers();
   }, [currentStage]);
 
@@ -187,6 +193,33 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   const handleStopCapstoneScore = () => {
     clearAudioTimers();
     setIsCapstonePlaying(false);
+  };
+
+  const handlePlayTargetScore = () => {
+    if (!capstoneTargetCompileResult || capstoneTargetCompileResult.midiNotes.length === 0) return;
+    clearAudioTimers();
+    setIsTargetAudioPlaying(true);
+    setIsCapstonePlaying(false);
+    const notes = capstoneTargetCompileResult.midiNotes;
+    const bpm = lesson.capstone?.tempoBpm || 80;
+    let currTime = 0;
+    notes.forEach((n, idx) => {
+      const durSec = (60 / bpm) * (4 / (n.duration || 4));
+      const t = window.setTimeout(() => {
+        audioEngine.playNote(n.midi, 0.7);
+        if (idx === notes.length - 1) {
+          const endT = window.setTimeout(() => setIsTargetAudioPlaying(false), durSec * 1000);
+          activeTimersRef.current.push(endT);
+        }
+      }, currTime * 1000);
+      activeTimersRef.current.push(t);
+      currTime += durSec;
+    });
+  };
+
+  const handleStopTargetScore = () => {
+    clearAudioTimers();
+    setIsTargetAudioPlaying(false);
   };
 
   const handleFinishLesson = () => {
@@ -802,6 +835,54 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                   </div>
                 </div>
               )}
+
+              {/* TARGET SOURCE MASTER SCORE BOX (Master Reference) */}
+              <div className="bg-slate-900 border-2 border-purple-500/40 rounded-2xl p-5 shadow-xl space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Eye className="w-4 h-4 text-purple-400" />
+                    <h3 className="text-xs font-bold text-purple-300 uppercase tracking-wider">
+                      Target Master Score to Reconstruct (Goal)
+                    </h3>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {isTargetAudioPlaying ? (
+                      <button
+                        onClick={handleStopTargetScore}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        <Square className="w-3 h-3 fill-white" />
+                        <span>Stop Audio</span>
+                      </button>
+                    ) : (
+                      <button
+                        onClick={handlePlayTargetScore}
+                        disabled={!capstoneTargetCompileResult || capstoneTargetCompileResult.midiNotes.length === 0}
+                        className="flex items-center gap-1.5 px-3 py-1 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition-colors shadow-sm"
+                      >
+                        <Volume2 className="w-3.5 h-3.5" />
+                        <span>Listen to Target</span>
+                      </button>
+                    )}
+                    <span className="text-[11px] font-semibold text-slate-400 bg-slate-950 px-2.5 py-1 rounded-full border border-slate-800">
+                      Master Reference
+                    </span>
+                  </div>
+                </div>
+
+                <div className="w-full max-h-[240px] overflow-y-auto overflow-x-auto rounded-xl bg-slate-950 p-4 border border-slate-800 flex justify-center items-center">
+                  {capstoneTargetCompileResult && capstoneTargetCompileResult.pages.length > 0 ? (
+                    <div
+                      className="w-full min-w-[500px] flex justify-center [&>svg]:w-full [&>svg]:h-auto [&>svg]:max-h-[220px]"
+                      dangerouslySetInnerHTML={{ __html: capstoneTargetCompileResult.pages[0] }}
+                    />
+                  ) : (
+                    <div className="text-center py-6 text-slate-500 text-xs">
+                      Engraving master reference score...
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Dual-Pane Editor & Live SVG Preview */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[420px]">
