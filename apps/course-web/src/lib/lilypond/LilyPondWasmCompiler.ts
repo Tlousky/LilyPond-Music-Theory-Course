@@ -225,18 +225,19 @@ export class LilyPondWasmCompiler {
     svg += `<line x1="30" y1="${staffY}" x2="30" y2="${staffY + 4 * lineSpacing}" class="bar-line"/>`;
 
     // Authentic SMuFL Clef Glyph (Treble, Bass, Alto, Tenor)
-    let xOffset = 50;
+    let xOffset = 46;
     const clefData = renderClefSvg(data.clef, xOffset, staffY, lineSpacing);
     svg += clefData.svg;
-    xOffset += clefData.width;
+    xOffset += clefData.width + 12;
 
-    // Time Signature
+    // Time Signature (centered numbers)
     const [num, den] = data.timeSig.split('/');
-    svg += `<text x="${xOffset}" y="${staffY + 16}" class="score-text" font-weight="bold">${num}</text>`;
-    svg += `<text x="${xOffset}" y="${staffY + 36}" class="score-text" font-weight="bold">${den}</text>`;
-    xOffset += 32;
+    const timeSigX = xOffset + 12;
+    svg += `<text x="${timeSigX}" y="${staffY + 17}" class="score-text" font-weight="bold" text-anchor="middle">${num}</text>`;
+    svg += `<text x="${timeSigX}" y="${staffY + 36}" class="score-text" font-weight="bold" text-anchor="middle">${den}</text>`;
+    xOffset = timeSigX + 22;
 
-    // Engrave Notes with Interactive textedit links
+    // Engrave Notes with Interactive textedit links and MIDI audio attributes
     const noteSpacing = Math.min(65, (width - xOffset - 60) / Math.max(1, data.notes.length));
     const baseC4Y = data.clef === 'treble' ? staffY + 5 * lineSpacing : staffY - lineSpacing;
 
@@ -266,8 +267,8 @@ export class LilyPondWasmCompiler {
         }
       }
 
-      // Click-to-code anchor
-      svg += `<a href="textedit://${note.line}:${note.col}" data-line="${note.line}" data-col="${note.col}">`;
+      // Interactive Note Anchor with textedit links and MIDI playback attributes
+      svg += `<a href="textedit://${note.line}:${note.col}" data-line="${note.line}" data-col="${note.col}" data-midi="${note.midi}" data-pitch="${note.pitch}" class="interactive-note" role="button" aria-label="Play note ${note.pitch}">`;
       // Notehead
       const isHollow = note.duration <= 2;
       svg += `<ellipse cx="${noteX}" cy="${noteY}" rx="6" ry="4.5" transform="rotate(-20 ${noteX} ${noteY})" class="note-head" ${isHollow ? 'fill="none" stroke="#f8fafc" stroke-width="2"' : ''}/>`;

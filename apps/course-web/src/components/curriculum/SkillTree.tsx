@@ -2,6 +2,7 @@ import React from 'react';
 import { Lesson, FUNDAMENTALS_LESSONS, REPERTOIRE_PIECES } from '../../data/curriculumData';
 import { UserState } from '../../lib/gamification/UserProgressStore';
 import { audioEngine } from '../../lib/audio/SoundFontAudioEngine';
+import { MarkdownView } from '../common/MarkdownView';
 import { CheckCircle2, Lock, Play, Star, BookOpen, Music, Code2 } from 'lucide-react';
 
 interface SkillTreeProps {
@@ -116,9 +117,9 @@ export const SkillTree: React.FC<SkillTreeProps> = ({ userState, onSelectLesson 
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-slate-400 mt-1 line-clamp-2">
-                      {lesson.theory_summary}
-                    </p>
+                    <div className="text-xs text-slate-400 mt-1 line-clamp-2">
+                      <MarkdownView content={lesson.theory_summary} inline />
+                    </div>
 
                     {/* Metadata tags */}
                     <div className="flex flex-wrap items-center gap-2 mt-3">

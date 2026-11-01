@@ -34,6 +34,15 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
     expect(result.pages[0]).toContain(SMUFL_GLYPHS.gClef);
     expect(result.midiNotes.length).toBe(4);
     expect(result.midiNotes[0].pitch).toBe('C4');
+
+    // Verify Issue #9: Proper clef scaling and non-overlapping time signature
+    expect(result.pages[0]).toMatch(/scale\(0\.019\d*,\s*-0\.019\d*\)/);
+    expect(result.pages[0]).toContain('text-anchor="middle"');
+
+    // Verify Issue #10: Interactive note attributes for click playback
+    expect(result.pages[0]).toContain('data-midi="60"');
+    expect(result.pages[0]).toContain('data-pitch="C4"');
+    expect(result.pages[0]).toContain('class="interactive-note"');
   });
 
   it('handles bass clef and accidentals with SMuFL vector glyphs', async () => {

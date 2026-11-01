@@ -20,7 +20,9 @@ export const SMUFL_GLYPHS = {
 };
 
 /**
- * Returns clean SVG markup for a staff clef
+ * Returns clean SVG markup for a staff clef, scaled and anchored to staff lines.
+ * Staff line distance = lineSpacing (e.g. 10px).
+ * In SMuFL font units, 1 staff space = 515 units (em size = 2048, 4 spaces = ~2060 units).
  */
 export function renderClefSvg(
   clef: string,
@@ -28,26 +30,27 @@ export function renderClefSvg(
   staffY: number,
   lineSpacing: number
 ): { svg: string; width: number } {
-  // 1 staff space = 250 SMuFL font units, so scale = lineSpacing / 250
-  const scale = lineSpacing / 250;
+  // 1 staff space = 515 SMuFL font units
+  const fontUnitsPerSpace = 515;
+  const scale = lineSpacing / fontUnitsPerSpace;
 
   if (clef === 'treble') {
-    // Treble Clef sits on G4 (2nd line from bottom = line 3 from top = staffY + 3 * lineSpacing)
+    // Treble Clef inner spiral loops around G4 (Line 2 from bottom = line 3 from top = staffY + 3 * lineSpacing)
     const gLineY = staffY + 3 * lineSpacing;
     return {
       svg: `<g transform="translate(${xOffset}, ${gLineY}) scale(${scale}, -${scale})">
         <path d="${SMUFL_GLYPHS.gClef}" fill="#f8fafc" class="clef-glyph" />
       </g>`,
-      width: 42
+      width: Math.round(1374 * scale + 6) // ~33px
     };
   } else if (clef === 'bass') {
-    // Bass Clef sits on F3 (4th line from bottom = line 1 from top = staffY + lineSpacing)
+    // Bass Clef sits on F3 (Line 4 from bottom = line 1 from top = staffY + lineSpacing)
     const fLineY = staffY + lineSpacing;
     return {
       svg: `<g transform="translate(${xOffset}, ${fLineY}) scale(${scale}, -${scale})">
         <path d="${SMUFL_GLYPHS.fClef}" fill="#f8fafc" class="clef-glyph" />
       </g>`,
-      width: 40
+      width: Math.round(1437 * scale + 6) // ~34px
     };
   } else {
     // Alto / Tenor Clef (C Clef)
@@ -56,7 +59,7 @@ export function renderClefSvg(
       svg: `<g transform="translate(${xOffset}, ${cLineY}) scale(${scale}, -${scale})">
         <path d="${SMUFL_GLYPHS.cClef}" fill="#f8fafc" class="clef-glyph" />
       </g>`,
-      width: 38
+      width: Math.round(1432 * scale + 6) // ~34px
     };
   }
 }
@@ -68,7 +71,7 @@ export function renderAccidentalSvg(
   accidental: 'sharp' | 'flat' | 'natural',
   x: number,
   y: number,
-  scale: number = 0.038
+  scale: number = 0.024
 ): string {
   const path = SMUFL_GLYPHS[accidental];
   if (!path) return '';

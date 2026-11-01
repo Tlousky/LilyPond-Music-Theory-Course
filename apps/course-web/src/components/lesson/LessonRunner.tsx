@@ -7,6 +7,7 @@ import { LilyPondEditor } from '../editor/LilyPondEditor';
 import { ScorePreview } from '../score/ScorePreview';
 import { VirtualPiano } from '../audio/VirtualPiano';
 import { RhythmMetronome } from '../audio/RhythmMetronome';
+import { MarkdownView } from '../common/MarkdownView';
 import { lilypondCompiler, CompileResult } from '../../lib/lilypond/LilyPondWasmCompiler';
 import { exerciseGrader, GradeResult } from '../../lib/grader/ExerciseGrader';
 import { audioEngine } from '../../lib/audio/SoundFontAudioEngine';
@@ -323,16 +324,14 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
           {/* Concept Summary Callout */}
           <div className="border-l-4 border-indigo-500 bg-indigo-950/20 p-4 rounded-r-xl">
             <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider">Core Principle</h3>
-            <p className="text-base text-slate-200 mt-1 font-medium leading-relaxed">
-              {lesson.theory?.summary || lesson.theory_summary}
-            </p>
+            <div className="text-base text-slate-200 mt-1 font-medium leading-relaxed">
+              <MarkdownView content={lesson.theory?.summary || lesson.theory_summary} inline />
+            </div>
           </div>
 
           {/* Detailed Textbook Markdown Content */}
-          <div className="bg-slate-950/60 p-6 rounded-xl border border-slate-800/80 prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
-            <div className="whitespace-pre-line">
-              {lesson.theory?.markdown || lesson.theory_summary}
-            </div>
+          <div className="bg-slate-950/60 p-6 rounded-xl border border-slate-800/80 text-slate-300 text-sm leading-relaxed">
+            <MarkdownView content={lesson.theory?.markdown || lesson.theory_summary} />
           </div>
 
           {/* Interactive Visual Staff / Keyboard Diagram */}
@@ -488,9 +487,9 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
             Writing with LilyPond: <code className="text-indigo-400 font-mono">{lesson.syntax?.command || lesson.syntax_id}</code>
           </h3>
 
-          <p className="text-sm text-slate-300 leading-relaxed">
-            {lesson.syntax?.explanation || lesson.theory_summary}
-          </p>
+          <div className="text-sm text-slate-300 leading-relaxed">
+            <MarkdownView content={lesson.syntax?.explanation || lesson.theory_summary} />
+          </div>
 
           {/* Core Rules List */}
           {lesson.syntax?.rules && (
@@ -580,7 +579,9 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
               >
                 <div className="flex items-start gap-2">
                   <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
-                  <p>{lesson.syntax?.quiz?.explanation || lesson.theory_quiz.explanation}</p>
+                  <div className="text-xs sm:text-sm">
+                    <MarkdownView content={lesson.syntax?.quiz?.explanation || lesson.theory_quiz.explanation} inline />
+                  </div>
                 </div>
               </div>
             )}
@@ -946,9 +947,11 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                           : 'text-rose-400'
                       }`}
                     >
-                      {capstoneReflectionSelected === lesson.capstone.reflectionAnswer
-                        ? `✨ Correct! ${lesson.capstone.reflectionExplanation}`
-                        : `❌ Review the score and theory principles above, or click Reveal Answer.`}
+                      {capstoneReflectionSelected === lesson.capstone.reflectionAnswer ? (
+                        <span>✨ Correct! <MarkdownView content={lesson.capstone.reflectionExplanation} inline /></span>
+                      ) : (
+                        `❌ Review the score and theory principles above, or click Reveal Answer.`
+                      )}
                     </p>
                   )}
                 </div>

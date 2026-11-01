@@ -1,5 +1,6 @@
 import React, { useRef } from 'react';
 import { Volume2, Square, Sparkles, Terminal } from 'lucide-react';
+import { audioEngine } from '../../lib/audio/SoundFontAudioEngine';
 
 interface ScorePreviewProps {
   svgPages: string[];
@@ -21,12 +22,28 @@ export const ScorePreview: React.FC<ScorePreviewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = (e.target as Element).closest('a[href^="textedit:"]');
-    if (target && onNoteClick) {
+    const target = (e.target as Element).closest('a[href^="textedit:"], .interactive-note');
+    if (target) {
       e.preventDefault();
-      const line = parseInt(target.getAttribute('data-line') || '1', 10);
-      const col = parseInt(target.getAttribute('data-col') || '1', 10);
-      onNoteClick(line, col);
+
+      // Play note pitch immediately via Web Audio engine
+      const midiAttr = target.getAttribute('data-midi');
+      const pitchAttr = target.getAttribute('data-pitch');
+      if (midiAttr) {
+        const midi = parseInt(midiAttr, 10);
+        if (!isNaN(midi)) {
+          audioEngine.playNote(midi, 0.7);
+        }
+      } else if (pitchAttr) {
+        audioEngine.playNote(pitchAttr, 0.7);
+      }
+
+      // If note-click navigation callback is provided, jump to editor line/col
+      if (onNoteClick) {
+        const line = parseInt(target.getAttribute('data-line') || '1', 10);
+        const col = parseInt(target.getAttribute('data-col') || '1', 10);
+        onNoteClick(line, col);
+      }
     }
   };
 
