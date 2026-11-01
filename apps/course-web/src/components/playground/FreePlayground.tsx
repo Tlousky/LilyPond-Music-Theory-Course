@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { LilyPondEditor } from '../editor/LilyPondEditor';
 import { ScorePreview } from '../score/ScorePreview';
 import { VirtualPiano } from '../audio/VirtualPiano';
@@ -43,8 +43,13 @@ export const FreePlayground: React.FC = () => {
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
+  const stopPlaybackRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
     runCompile(code);
+    return () => {
+      stopPlaybackRef.current?.();
+    };
   }, []);
 
   const runCompile = async (codeToCompile: string) => {
@@ -56,19 +61,19 @@ export const FreePlayground: React.FC = () => {
 
   const handlePlayAudio = () => {
     if (!compileResult || compileResult.midiNotes.length === 0) return;
+    stopPlaybackRef.current?.();
     setIsPlaying(true);
 
-    let offset = 0;
-    compileResult.midiNotes.forEach((note) => {
-      setTimeout(() => {
-        audioEngine.playNote(note.midi, 0.7);
-      }, offset * 450);
-      offset += 1;
+    stopPlaybackRef.current = audioEngine.playScore(compileResult.midiNotes, {
+      bpm: 80,
+      onComplete: () => setIsPlaying(false),
     });
+  };
 
-    setTimeout(() => {
-      setIsPlaying(false);
-    }, (offset + 1) * 450);
+  const handleStopAudio = () => {
+    stopPlaybackRef.current?.();
+    stopPlaybackRef.current = null;
+    setIsPlaying(false);
   };
 
   const handleInsertPianoNote = (noteName: string, lilySyntax: string) => {
@@ -107,7 +112,7 @@ export const FreePlayground: React.FC = () => {
           logs={compileResult ? compileResult.logs : []}
           isPlaying={isPlaying}
           onPlayAudio={handlePlayAudio}
-          onStopAudio={() => setIsPlaying(false)}
+          onStopAudio={handleStopAudio}
         />
       </div>
 

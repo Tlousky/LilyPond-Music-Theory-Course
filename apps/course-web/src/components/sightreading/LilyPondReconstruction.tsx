@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { SightReadingExercise } from '../../data/sightReadingData';
 import { lilypondCompiler, CompileResult } from '../../lib/lilypond/LilyPondWasmCompiler';
 import { exerciseGrader, GradeResult } from '../../lib/grader/ExerciseGrader';
@@ -47,7 +47,10 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
   const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
 
   // Compile target score and initial user code
+  const stopPlaybackRef = useRef<(() => void) | null>(null);
+
   useEffect(() => {
+    stopPlaybackRef.current?.();
     lilypondCompiler.compile(exercise.targetCode).then(setTargetCompileResult);
 
     const initialCode =
@@ -60,6 +63,10 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
     setGradeResult(null);
     setShowHints(false);
     setRevealedHintCount(1);
+
+    return () => {
+      stopPlaybackRef.current?.();
+    };
   }, [exercise.id, difficulty]);
 
   const runCompile = async (codeToCompile: string) => {
@@ -71,22 +78,17 @@ export const LilyPondReconstruction: React.FC<LilyPondReconstructionProps> = ({
 
   const handlePlayAudio = () => {
     if (!userCompileResult || userCompileResult.midiNotes.length === 0) return;
+    stopPlaybackRef.current?.();
     setIsPlayingAudio(true);
-    const notes = userCompileResult.midiNotes;
-    let currTime = 0;
-    notes.forEach((n, idx) => {
-      const durSec = (60 / exercise.tempoBpm) * (4 / (n.duration || 4));
-      setTimeout(() => {
-        audioEngine.playNote(n.midi, 0.7);
-        if (idx === notes.length - 1) {
-          setTimeout(() => setIsPlayingAudio(false), durSec * 1000);
-        }
-      }, currTime * 1000);
-      currTime += durSec;
+    stopPlaybackRef.current = audioEngine.playScore(userCompileResult.midiNotes, {
+      bpm: exercise.tempoBpm || 80,
+      onComplete: () => setIsPlayingAudio(false),
     });
   };
 
   const handleStopAudio = () => {
+    stopPlaybackRef.current?.();
+    stopPlaybackRef.current = null;
     setIsPlayingAudio(false);
   };
 

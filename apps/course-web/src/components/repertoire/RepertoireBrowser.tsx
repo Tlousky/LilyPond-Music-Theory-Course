@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { REPERTOIRE_PIECES, RepertoirePiece } from '../../data/curriculumData';
 import { LilyPondEditor } from '../editor/LilyPondEditor';
 import { ScorePreview } from '../score/ScorePreview';
@@ -13,10 +13,15 @@ export const RepertoireBrowser: React.FC = () => {
   const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
   const [isCompiling, setIsCompiling] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const stopPlaybackRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
+    stopPlaybackRef.current?.();
     setPieceCode(selectedPiece.code);
     runCompile(selectedPiece.code);
+    return () => {
+      stopPlaybackRef.current?.();
+    };
   }, [selectedPiece.id]);
 
   const runCompile = async (code: string) => {
@@ -28,19 +33,20 @@ export const RepertoireBrowser: React.FC = () => {
 
   const handlePlayAudio = () => {
     if (!compileResult || compileResult.midiNotes.length === 0) return;
+    stopPlaybackRef.current?.();
     setIsPlaying(true);
 
-    let offset = 0;
-    compileResult.midiNotes.forEach((note) => {
-      setTimeout(() => {
-        audioEngine.playNote(note.midi, 0.7);
-      }, offset * 400);
-      offset += 1;
+    const bpm = selectedPiece.meter === '3/4' ? 100 : 90;
+    stopPlaybackRef.current = audioEngine.playScore(compileResult.midiNotes, {
+      bpm,
+      onComplete: () => setIsPlaying(false),
     });
+  };
 
-    setTimeout(() => {
-      setIsPlaying(false);
-    }, (offset + 1) * 400);
+  const handleStopAudio = () => {
+    stopPlaybackRef.current?.();
+    stopPlaybackRef.current = null;
+    setIsPlaying(false);
   };
 
   return (
@@ -115,7 +121,7 @@ export const RepertoireBrowser: React.FC = () => {
           logs={compileResult ? compileResult.logs : []}
           isPlaying={isPlaying}
           onPlayAudio={handlePlayAudio}
-          onStopAudio={() => setIsPlaying(false)}
+          onStopAudio={handleStopAudio}
         />
       </div>
     </div>

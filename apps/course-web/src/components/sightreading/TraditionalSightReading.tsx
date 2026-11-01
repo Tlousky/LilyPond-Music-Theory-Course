@@ -51,6 +51,7 @@ export const TraditionalSightReading: React.FC<TraditionalSightReadingProps> = (
 
   const metronomeTimerRef = useRef<number | null>(null);
   const previewTimersRef = useRef<number[]>([]);
+  const stopScorePlaybackRef = useRef<(() => void) | null>(null);
   const beatTimeRef = useRef<number>(0);
   const metronomeBeatRef = useRef<number>(1);
 
@@ -69,6 +70,8 @@ export const TraditionalSightReading: React.FC<TraditionalSightReadingProps> = (
   }, [exercise.id]);
 
   const stopAllAudio = () => {
+    stopScorePlaybackRef.current?.();
+    stopScorePlaybackRef.current = null;
     previewTimersRef.current.forEach((t) => clearTimeout(t));
     previewTimersRef.current = [];
     if (metronomeTimerRef.current) {
@@ -110,22 +113,11 @@ export const TraditionalSightReading: React.FC<TraditionalSightReadingProps> = (
     stopAllAudio();
     setIsPreviewPlaying(true);
 
-    let offsetMs = 0;
-    targetNotes.forEach((note, idx) => {
-      const durFactor = 4 / (note.duration || 4);
-      const noteDurMs = Math.max(200, Math.min(1800, durFactor * 500));
-
-      const timer = window.setTimeout(() => {
-        audioEngine.playNote(note.midi, (noteDurMs / 1000) * 0.9, 'piano');
-      }, offsetMs);
-      previewTimersRef.current.push(timer);
-      offsetMs += noteDurMs;
+    const currentBpm = mode === 'slow_metronome' ? exercise.slowBpm : exercise.tempoBpm;
+    stopScorePlaybackRef.current = audioEngine.playScore(targetNotes, {
+      bpm: currentBpm || 80,
+      onComplete: () => setIsPreviewPlaying(false),
     });
-
-    const endTimer = window.setTimeout(() => {
-      setIsPreviewPlaying(false);
-    }, offsetMs + 300);
-    previewTimersRef.current.push(endTimer);
   };
 
   // Metronome modes timing logic

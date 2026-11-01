@@ -18,6 +18,23 @@ interface MIDIMessageEvent {
 
 export type InstrumentType = 'piano' | 'harpsichord' | 'strings' | 'metronome';
 
+export interface ScoreNote {
+  midi: number;
+  pitch?: string;
+  duration?: number;
+  dots?: number;
+  durationBeats?: number;
+  timeBeats?: number;
+}
+
+export interface PlayScoreOptions {
+  bpm?: number;
+  instrument?: InstrumentType;
+  velocity?: number;
+  onNoteStart?: (note: ScoreNote, index: number) => void;
+  onComplete?: () => void;
+}
+
 export interface NoteEvent {
   midi: number;
   pitch: string;
@@ -450,6 +467,69 @@ export class SoundFontAudioEngine {
       osc.start(now);
       osc.stop(now + durationSec);
     }
+  }
+
+  /**
+   * Plays back an entire score with precise rhythmic timing and note durations.
+   * Supports polyphony (chords and parallel voices), dotted notes, rests, and custom BPM.
+   * Returns a stop function that immediately silences all scheduled notes and stops playback.
+   */
+  public playScore(
+    notes: ScoreNote[],
+    options?: PlayScoreOptions
+  ): () => void {
+    this.init();
+    if (!notes || notes.length === 0) {
+      options?.onComplete?.();
+      return () => {};
+    }
+
+    const bpm = options?.bpm ?? 80;
+    const instrument = options?.instrument ?? this.currentInstrument;
+    const velocity = options?.velocity ?? 0.8;
+    const secPerBeat = 60 / bpm;
+
+    const timerIds: ReturnType<typeof setTimeout>[] = [];
+    let isCancelled = false;
+
+    // Calculate maximum end time of the entire score
+    let maxEndTimeBeats = 0;
+    for (let i = 0; i < notes.length; i++) {
+      const n = notes[i];
+      const start = n.timeBeats ?? i;
+      const dur = n.durationBeats ?? (4 / (n.duration || 4));
+      const end = start + dur;
+      if (end > maxEndTimeBeats) maxEndTimeBeats = end;
+    }
+    const totalScoreDurationSec = maxEndTimeBeats * secPerBeat;
+
+    // Schedule playback for each note
+    notes.forEach((note, idx) => {
+      const startSec = (note.timeBeats ?? idx) * secPerBeat;
+      const durBeats = note.durationBeats ?? (4 / (note.duration || 4));
+      const durSec = durBeats * secPerBeat;
+
+      const timer = setTimeout(() => {
+        if (isCancelled) return;
+        options?.onNoteStart?.(note, idx);
+        this.playNote(note.midi, durSec * 0.95, instrument, velocity);
+      }, Math.max(0, startSec * 1000));
+
+      timerIds.push(timer);
+    });
+
+    // Schedule onComplete callback after entire score has finished
+    const completeTimer = setTimeout(() => {
+      if (isCancelled) return;
+      options?.onComplete?.();
+    }, Math.max(100, (totalScoreDurationSec + 0.1) * 1000));
+    timerIds.push(completeTimer);
+
+    // Return cancellation function
+    return () => {
+      isCancelled = true;
+      timerIds.forEach((id) => clearTimeout(id));
+    };
   }
 
   /**

@@ -86,8 +86,11 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   const [showCapstoneHint, setShowCapstoneHint] = useState<boolean>(false);
 
   const activeTimersRef = useRef<number[]>([]);
+  const stopScorePlaybackRef = useRef<(() => void) | null>(null);
 
   const clearAudioTimers = () => {
+    stopScorePlaybackRef.current?.();
+    stopScorePlaybackRef.current = null;
     activeTimersRef.current.forEach((t) => clearTimeout(t));
     activeTimersRef.current = [];
   };
@@ -172,22 +175,11 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     if (!capstoneCompileResult || capstoneCompileResult.midiNotes.length === 0) return;
     clearAudioTimers();
     setIsCapstonePlaying(true);
-
-    let offsetMs = 0;
-    capstoneCompileResult.midiNotes.forEach((note) => {
-      const durFactor = 4 / (note.duration || 4);
-      const noteDurationMs = Math.max(180, Math.min(2000, durFactor * 520));
-      const timer = window.setTimeout(() => {
-        audioEngine.playNote(note.midi, (noteDurationMs / 1000) * 0.95, 'piano');
-      }, offsetMs);
-      activeTimersRef.current.push(timer);
-      offsetMs += noteDurationMs;
+    const bpm = lesson.capstone?.tempoBpm || 80;
+    stopScorePlaybackRef.current = audioEngine.playScore(capstoneCompileResult.midiNotes, {
+      bpm,
+      onComplete: () => setIsCapstonePlaying(false),
     });
-
-    const endTimer = window.setTimeout(() => {
-      setIsCapstonePlaying(false);
-    }, offsetMs + 250);
-    activeTimersRef.current.push(endTimer);
   };
 
   const handleStopCapstoneScore = () => {
@@ -200,20 +192,10 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     clearAudioTimers();
     setIsTargetAudioPlaying(true);
     setIsCapstonePlaying(false);
-    const notes = capstoneTargetCompileResult.midiNotes;
     const bpm = lesson.capstone?.tempoBpm || 80;
-    let currTime = 0;
-    notes.forEach((n, idx) => {
-      const durSec = (60 / bpm) * (4 / (n.duration || 4));
-      const t = window.setTimeout(() => {
-        audioEngine.playNote(n.midi, 0.7);
-        if (idx === notes.length - 1) {
-          const endT = window.setTimeout(() => setIsTargetAudioPlaying(false), durSec * 1000);
-          activeTimersRef.current.push(endT);
-        }
-      }, currTime * 1000);
-      activeTimersRef.current.push(t);
-      currTime += durSec;
+    stopScorePlaybackRef.current = audioEngine.playScore(capstoneTargetCompileResult.midiNotes, {
+      bpm,
+      onComplete: () => setIsTargetAudioPlaying(false),
     });
   };
 
