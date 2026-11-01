@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { Lesson, REPERTOIRE_PIECES } from '../../data/curriculumData';
+import { TheoryDiagram } from '../curriculum/TheoryDiagram';
+import { TraditionalSightReading } from '../sightreading/TraditionalSightReading';
+import { LilyPondReconstruction } from '../sightreading/LilyPondReconstruction';
 import { LilyPondEditor } from '../editor/LilyPondEditor';
 import { ScorePreview } from '../score/ScorePreview';
 import { VirtualPiano } from '../audio/VirtualPiano';
@@ -7,10 +10,11 @@ import { RhythmMetronome } from '../audio/RhythmMetronome';
 import { lilypondCompiler, CompileResult } from '../../lib/lilypond/LilyPondWasmCompiler';
 import { exerciseGrader, GradeResult } from '../../lib/grader/ExerciseGrader';
 import { audioEngine } from '../../lib/audio/SoundFontAudioEngine';
+import { SightReadingExercise } from '../../data/sightReadingData';
 import confetti from 'canvas-confetti';
 import {
   BookOpen,
-  HelpCircle,
+  Piano,
   Code2,
   CheckCircle,
   Music,
@@ -25,6 +29,10 @@ import {
   Check,
   Copy,
   Lock,
+  Volume2,
+  HelpCircle,
+  Eye,
+  Layers,
 } from 'lucide-react';
 
 interface LessonRunnerProps {
@@ -38,31 +46,41 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
   onBack,
   onComplete,
 }) => {
-  // Current stage: 1 = Theory, 2 = Theory Practice, 3 = LilyPond Syntax, 4 = Code Challenge, 5 = Repertoire Capstone
+  // Current 5-phase stage:
+  // 1 = In-Depth Theory & Diagrams
+  // 2 = Traditional Score vs Keyboard Practice
+  // 3 = LilyPond Notation Rules & Syntax
+  // 4 = LilyPond Reconstruction Challenge
+  // 5 = Mixed Capstone (Code + Piano Performance)
   const [currentStage, setCurrentStage] = useState<number>(1);
 
-  // Stage 2: Quiz state
-  const [selectedOption, setSelectedOption] = useState<number | null>(null);
-  const [quizSubmitted, setQuizSubmitted] = useState<boolean>(false);
+  // Stage 1 state
+  const [playingAudioId, setPlayingAudioId] = useState<string | null>(null);
 
-  // Stage 4: Code Challenge state
-  const [userCode, setUserCode] = useState<string>(lesson.coding_challenge.initial_code);
-  const [isCompiling, setIsCompiling] = useState<boolean>(false);
-  const [compileResult, setCompileResult] = useState<CompileResult | null>(null);
-  const [gradeResult, setGradeResult] = useState<GradeResult | null>(null);
-  const [isPlayingAudio, setIsPlayingAudio] = useState<boolean>(false);
+  // Stage 2 state
+  const [stage2Complete, setStage2Complete] = useState<boolean>(false);
 
-  // Stage 5: Repertoire state
-  const repPiece = lesson.repertoire_id ? REPERTOIRE_PIECES[lesson.repertoire_id] : null;
-  const [repCompileResult, setRepCompileResult] = useState<CompileResult | null>(null);
-  const [isRepPlaying, setIsRepPlaying] = useState<boolean>(false);
-  const [repActiveTab, setRepActiveTab] = useState<'sheet' | 'code'>('sheet');
-  const [capstoneSelectedOption, setCapstoneSelectedOption] = useState<number | null>(null);
+  // Stage 3 state (Syntax quiz)
+  const [syntaxQuizSelected, setSyntaxQuizSelected] = useState<number | null>(null);
+  const [syntaxQuizSubmitted, setSyntaxQuizSubmitted] = useState<boolean>(false);
+
+  // Stage 4 state
+  const [stage4Complete, setStage4Complete] = useState<boolean>(false);
+
+  // Stage 5 state (Mixed Capstone)
+  const [capstonePhase, setCapstonePhase] = useState<'code' | 'perform'>('code');
+  const [capstoneCode, setCapstoneCode] = useState<string>(
+    lesson.capstone?.initialCode || lesson.coding_challenge.initial_code
+  );
+  const [isCompilingCapstone, setIsCompilingCapstone] = useState<boolean>(false);
+  const [capstoneCompileResult, setCapstoneCompileResult] = useState<CompileResult | null>(null);
+  const [capstoneGradeResult, setCapstoneGradeResult] = useState<GradeResult | null>(null);
+  const [isCapstonePlaying, setIsCapstonePlaying] = useState<boolean>(false);
+  const [capstoneReflectionSelected, setCapstoneReflectionSelected] = useState<number | null>(null);
+  const [capstoneReflectionSubmitted, setCapstoneReflectionSubmitted] = useState<boolean>(false);
   const [capstoneUnlocked, setCapstoneUnlocked] = useState<boolean>(false);
-  const [capstoneSubmitted, setCapstoneSubmitted] = useState<boolean>(false);
   const [copiedCode, setCopiedCode] = useState<boolean>(false);
 
-  // Active audio timers for clean cancellation
   const activeTimersRef = useRef<number[]>([]);
 
   const clearAudioTimers = () => {
@@ -70,99 +88,86 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     activeTimersRef.current = [];
   };
 
-  // Initial compile for coding challenge and repertoire
+  // Reset states when lesson changes
   useEffect(() => {
     clearAudioTimers();
-    setIsPlayingAudio(false);
-    setIsRepPlaying(false);
-    setCapstoneSelectedOption(null);
+    setCurrentStage(1);
+    setStage2Complete(false);
+    setSyntaxQuizSelected(null);
+    setSyntaxQuizSubmitted(false);
+    setStage4Complete(false);
+    setCapstonePhase('code');
+    setCapstoneCode(lesson.capstone?.initialCode || lesson.coding_challenge.initial_code);
+    setCapstoneGradeResult(null);
+    setCapstoneReflectionSelected(null);
+    setCapstoneReflectionSubmitted(false);
     setCapstoneUnlocked(false);
-    setCapstoneSubmitted(false);
-    setRepActiveTab('sheet');
 
-    runCompile(userCode);
-    if (repPiece) {
-      lilypondCompiler.compile(repPiece.code).then(setRepCompileResult);
-    }
+    const initialCode = lesson.capstone?.initialCode || lesson.coding_challenge.initial_code;
+    lilypondCompiler.compile(initialCode).then(setCapstoneCompileResult);
   }, [lesson.id]);
 
-  // Clean audio on stage transition or unmount
+  // Clean audio timers on stage changes
   useEffect(() => {
     clearAudioTimers();
-    setIsPlayingAudio(false);
-    setIsRepPlaying(false);
-    return () => {
-      clearAudioTimers();
-    };
+    setIsCapstonePlaying(false);
+    return () => clearAudioTimers();
   }, [currentStage]);
-
-  const runCompile = async (codeToCompile: string) => {
-    setIsCompiling(true);
-    const result = await lilypondCompiler.compile(codeToCompile);
-    setCompileResult(result);
-    setIsCompiling(false);
-  };
 
   const handleStageChange = (newStage: number) => {
     audioEngine.playUiSelect();
     setCurrentStage(newStage);
   };
 
-  const handleGradeCode = async () => {
-    const result = await exerciseGrader.gradeLilyPondChallenge(
-      userCode,
-      lesson.coding_challenge.expected_pitches
-    );
-    setGradeResult(result);
+  const handlePlayPreviewAudio = (id: string, midiNotes: number[], dur: number = 0.6) => {
+    setPlayingAudioId(id);
+    midiNotes.forEach((midi, idx) => {
+      const timer = window.setTimeout(() => {
+        audioEngine.playNote(midi, dur, 'piano');
+      }, idx * 400);
+      activeTimersRef.current.push(timer);
+    });
+
+    const endTimer = window.setTimeout(() => {
+      setPlayingAudioId(null);
+    }, midiNotes.length * 400 + 300);
+    activeTimersRef.current.push(endTimer);
+  };
+
+  const handleCompileCapstone = async (code: string) => {
+    setIsCompilingCapstone(true);
+    const res = await lilypondCompiler.compile(code);
+    setCapstoneCompileResult(res);
+    setIsCompilingCapstone(false);
+  };
+
+  const handleGradeCapstoneCode = async () => {
+    const expected = lesson.capstone?.expectedPitches || lesson.coding_challenge.expected_pitches;
+    const result = await exerciseGrader.gradeLilyPondChallenge(capstoneCode, expected);
+    setCapstoneGradeResult(result);
 
     if (result.passed) {
       audioEngine.playSuccessChime();
       confetti({
-        particleCount: 80,
+        particleCount: 70,
         spread: 60,
         origin: { y: 0.7 },
       });
+      setCapstoneUnlocked(true);
     } else {
       audioEngine.playErrorBuzz();
     }
   };
 
-  const handlePlayScore = () => {
-    if (!compileResult || compileResult.midiNotes.length === 0) return;
+  const handlePlayCapstoneScore = () => {
+    if (!capstoneCompileResult || capstoneCompileResult.midiNotes.length === 0) return;
     clearAudioTimers();
-    setIsPlayingAudio(true);
+    setIsCapstonePlaying(true);
 
     let offsetMs = 0;
-    compileResult.midiNotes.forEach((note) => {
+    capstoneCompileResult.midiNotes.forEach((note) => {
       const durFactor = 4 / (note.duration || 4);
-      const noteDurationMs = Math.max(180, Math.min(2000, durFactor * 500));
-      const timer = window.setTimeout(() => {
-        audioEngine.playNote(note.midi, (noteDurationMs / 1000) * 0.9, 'piano');
-      }, offsetMs);
-      activeTimersRef.current.push(timer);
-      offsetMs += noteDurationMs;
-    });
-
-    const endTimer = window.setTimeout(() => {
-      setIsPlayingAudio(false);
-    }, offsetMs + 200);
-    activeTimersRef.current.push(endTimer);
-  };
-
-  const handleStopScore = () => {
-    clearAudioTimers();
-    setIsPlayingAudio(false);
-  };
-
-  const handlePlayRepScore = () => {
-    if (!repCompileResult || repCompileResult.midiNotes.length === 0) return;
-    clearAudioTimers();
-    setIsRepPlaying(true);
-
-    let offsetMs = 0;
-    repCompileResult.midiNotes.forEach((note) => {
-      const durFactor = 4 / (note.duration || 4);
-      const noteDurationMs = Math.max(180, Math.min(2200, durFactor * 550));
+      const noteDurationMs = Math.max(180, Math.min(2000, durFactor * 520));
       const timer = window.setTimeout(() => {
         audioEngine.playNote(note.midi, (noteDurationMs / 1000) * 0.95, 'piano');
       }, offsetMs);
@@ -171,49 +176,85 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
     });
 
     const endTimer = window.setTimeout(() => {
-      setIsRepPlaying(false);
-    }, offsetMs + 300);
+      setIsCapstonePlaying(false);
+    }, offsetMs + 250);
     activeTimersRef.current.push(endTimer);
   };
 
-  const handleStopRepScore = () => {
+  const handleStopCapstoneScore = () => {
     clearAudioTimers();
-    setIsRepPlaying(false);
-  };
-
-  const capstoneChallenge = repPiece?.capstone_challenge || {
-    question: `Examine the engraved score: What time signature (meter) is specified for this excerpt?`,
-    options: [
-      `${repPiece?.meter || '4/4'} time signature`,
-      '3/8 dance meter',
-      '5/4 irregular meter',
-      'Free unmetered cadenza',
-    ],
-    answer: 0,
-    explanation: `The score specifies \\time ${repPiece?.meter || '4/4'}.`,
+    setIsCapstonePlaying(false);
   };
 
   const handleFinishLesson = () => {
     audioEngine.playCompletionFanfare();
     confetti({
-      particleCount: 150,
+      particleCount: 160,
       spread: 90,
       origin: { y: 0.6 },
     });
     onComplete(lesson.id);
   };
 
+  // Adapt lesson data to SightReadingExercise for Stage 2 & Stage 4
+  const stage2Exercise: SightReadingExercise = {
+    id: `sr_stage2_${lesson.id}`,
+    level: lesson.chapter_order,
+    title: lesson.traditionalPractice?.title || `${lesson.title} - Score vs Keyboard`,
+    description: lesson.traditionalPractice?.instructions || 'Read the score and play the notes on the keyboard.',
+    clef: lesson.traditionalPractice?.clef || 'treble',
+    key: lesson.traditionalPractice?.key || 'C major',
+    meter: lesson.traditionalPractice?.meter || '4/4',
+    tempoBpm: lesson.traditionalPractice?.tempoBpm || 80,
+    slowBpm: lesson.traditionalPractice?.slowBpm || 50,
+    targetCode: lesson.traditionalPractice?.targetCode || lesson.coding_challenge.solution_code,
+    scaffoldCode: lesson.traditionalPractice?.targetCode || lesson.coding_challenge.solution_code,
+    theoryTips: lesson.traditionalPractice?.hints || [lesson.theory_summary],
+  };
+
+  const stage4Exercise: SightReadingExercise = {
+    id: `sr_stage4_${lesson.id}`,
+    level: lesson.chapter_order,
+    title: lesson.reconstruction?.prompt || lesson.coding_challenge.prompt,
+    description: lesson.reconstruction?.hints.join(' ') || lesson.coding_challenge.hint,
+    clef: lesson.traditionalPractice?.clef || 'treble',
+    key: lesson.traditionalPractice?.key || 'C major',
+    meter: lesson.traditionalPractice?.meter || '4/4',
+    tempoBpm: lesson.traditionalPractice?.tempoBpm || 80,
+    slowBpm: lesson.traditionalPractice?.slowBpm || 50,
+    targetCode: lesson.reconstruction?.solutionCode || lesson.coding_challenge.solution_code,
+    scaffoldCode: lesson.reconstruction?.scaffoldCode || lesson.coding_challenge.initial_code,
+    theoryTips: lesson.reconstruction?.hints || [lesson.coding_challenge.hint],
+  };
+
+  const capstonePerformanceExercise: SightReadingExercise = {
+    id: `sr_capstone_${lesson.id}`,
+    level: lesson.chapter_order,
+    title: `${lesson.capstone?.title || 'Classical Masterpiece'} - Piano Performance`,
+    description: `${lesson.capstone?.composer || 'Composer'} · ${lesson.capstone?.meter || '4/4'} · Key: ${
+      lesson.capstone?.key || 'C major'
+    }`,
+    clef: lesson.traditionalPractice?.clef || 'treble',
+    key: lesson.capstone?.key || 'C major',
+    meter: lesson.capstone?.meter || '4/4',
+    tempoBpm: lesson.capstone?.tempoBpm || 90,
+    slowBpm: lesson.capstone?.slowBpm || 55,
+    targetCode: lesson.capstone?.solutionCode || lesson.coding_challenge.solution_code,
+    scaffoldCode: lesson.capstone?.initialCode || lesson.coding_challenge.initial_code,
+    theoryTips: [lesson.capstone?.hint || 'Perform the phrase cleanly on the keyboard.'],
+  };
+
   const stages = [
-    { num: 1, label: 'Theory', icon: BookOpen },
-    { num: 2, label: 'Quiz', icon: HelpCircle },
-    { num: 3, label: 'Syntax', icon: Code2 },
-    { num: 4, label: 'Challenge', icon: Sparkles },
-    { num: 5, label: 'Capstone', icon: Music },
+    { num: 1, label: '1. Theory Concept', short: 'Theory', icon: BookOpen },
+    { num: 2, label: '2. Traditional Practice', short: 'Score vs Piano', icon: Piano },
+    { num: 3, label: '3. LilyPond Rules', short: 'Syntax', icon: Code2 },
+    { num: 4, label: '4. Reconstruction', short: 'Reconstruct', icon: Sparkles },
+    { num: 5, label: '5. Mixed Capstone', short: 'Capstone', icon: Music },
   ];
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-6">
-      {/* Top Breadcrumb & Progress Bar */}
+      {/* Top Navigation & 5-Phase Breadcrumb Bar */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
         <button
           onClick={onBack}
@@ -223,8 +264,8 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
           Back to Curriculum
         </button>
 
-        {/* 5-Stage Step Indicators */}
-        <div className="flex items-center gap-1 sm:gap-3 bg-slate-900 border border-slate-800 p-1.5 rounded-xl">
+        {/* 5-Phase Step Indicators */}
+        <div className="flex items-center gap-1 sm:gap-2 bg-slate-900 border border-slate-800 p-1.5 rounded-xl">
           {stages.map((st) => {
             const Icon = st.icon;
             const isActive = currentStage === st.num;
@@ -247,115 +288,173 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
                 ) : (
                   <Icon className="w-3.5 h-3.5" />
                 )}
-                <span className="hidden md:inline">{st.label}</span>
+                <span className="hidden md:inline">{st.short}</span>
               </button>
             );
           })}
         </div>
       </div>
 
-      {/* Lesson Header */}
-      <div className="mb-6">
-        <h2 className="text-2xl font-extrabold text-white tracking-tight">
-          {lesson.title}
-        </h2>
+      {/* Lesson Header Title */}
+      <div className="mb-6 flex flex-col sm:flex-row sm:items-baseline justify-between gap-2 border-b border-slate-800 pb-4">
+        <div>
+          <span className="text-xs font-bold text-indigo-400 uppercase tracking-wider">
+            Open Music Theory · Chapter {lesson.chapter_order}
+          </span>
+          <h2 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight mt-1">
+            {lesson.title}
+          </h2>
+        </div>
+        <div className="text-xs text-slate-400 font-mono">
+          Phase {currentStage} of 5
+        </div>
       </div>
 
-      {/* STAGE 1: Theory Concept Card */}
+      {/* ========================================================================================= */}
+      {/* PHASE 1: In-Depth Music Theory Concept & Diagrams                                         */}
+      {/* ========================================================================================= */}
       {currentStage === 1 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-          <div className="border-l-4 border-indigo-500 pl-4 py-1">
-            <h3 className="text-lg font-bold text-white">Music Theory Foundations</h3>
-            <p className="text-sm text-slate-300 mt-2 leading-relaxed">
-              {lesson.theory_summary}
+          <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+            <BookOpen className="w-4 h-4" />
+            <span>Phase 1 · In-Depth Music Theory Concept</span>
+          </div>
+
+          {/* Concept Summary Callout */}
+          <div className="border-l-4 border-indigo-500 bg-indigo-950/20 p-4 rounded-r-xl">
+            <h3 className="text-sm font-bold text-indigo-300 uppercase tracking-wider">Core Principle</h3>
+            <p className="text-base text-slate-200 mt-1 font-medium leading-relaxed">
+              {lesson.theory?.summary || lesson.theory_summary}
             </p>
           </div>
 
-          {/* Interactive Virtual Piano Reference */}
-          <div className="mt-6 pt-6 border-t border-slate-800">
+          {/* Detailed Textbook Markdown Content */}
+          <div className="bg-slate-950/60 p-6 rounded-xl border border-slate-800/80 prose prose-invert max-w-none text-slate-300 text-sm leading-relaxed space-y-4">
+            <div className="whitespace-pre-line">
+              {lesson.theory?.markdown || lesson.theory_summary}
+            </div>
+          </div>
+
+          {/* Interactive Visual Staff / Keyboard Diagram */}
+          {lesson.theory?.diagramType && (
+            <div>
+              <TheoryDiagram type={lesson.theory.diagramType} />
+            </div>
+          )}
+
+          {/* Audio Examples & Listening Previews */}
+          {lesson.theory?.audioPreviews && lesson.theory.audioPreviews.length > 0 && (
+            <div className="bg-slate-950/70 border border-slate-800 rounded-xl p-4">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3 flex items-center gap-2">
+                <Volume2 className="w-4 h-4 text-indigo-400" />
+                Listen & Audiate Musical Concepts
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {lesson.theory.audioPreviews.map((preview, i) => (
+                  <button
+                    key={i}
+                    onClick={() => handlePlayPreviewAudio(`preview-${i}`, preview.midi)}
+                    className={`flex items-start text-left gap-3 p-3 rounded-lg border transition-all ${
+                      playingAudioId === `preview-${i}`
+                        ? 'bg-indigo-600/30 border-indigo-400 text-white ring-2 ring-indigo-500/30'
+                        : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-700 hover:text-white'
+                    }`}
+                  >
+                    <div className="w-7 h-7 rounded-full bg-indigo-500/20 text-indigo-300 flex items-center justify-center shrink-0 mt-0.5">
+                      <Play className="w-3.5 h-3.5 fill-indigo-300" />
+                    </div>
+                    <div>
+                      <span className="text-xs font-bold block">{preview.label}</span>
+                      <span className="text-[11px] text-slate-400 leading-snug block mt-0.5">
+                        {preview.description}
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Key Takeaways Card */}
+          {lesson.theory?.keyTakeaways && lesson.theory.keyTakeaways.length > 0 && (
+            <div className="bg-emerald-950/20 border border-emerald-500/30 rounded-xl p-4">
+              <h4 className="text-xs font-bold text-emerald-400 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Lightbulb className="w-4 h-4" />
+                Key Takeaways
+              </h4>
+              <ul className="text-xs text-emerald-200/90 list-disc list-inside space-y-1.5">
+                {lesson.theory.keyTakeaways.map((point, idx) => (
+                  <li key={idx} className="leading-relaxed">
+                    {point}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Interactive Virtual Piano Free Reference */}
+          <div className="pt-4 border-t border-slate-800">
             <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">
-              Keyboard Reference & Ear Training
+              Virtual Piano Keyboard Reference
             </h4>
             <p className="text-xs text-slate-400 mb-4">
-              Click or press computer keys to listen and observe corresponding LilyPond note notation.
+              Engage kinesthetically! Tap keys to audiate pitches and observe their musical staff notation.
             </p>
             <VirtualPiano />
           </div>
 
-          <div className="flex justify-end pt-4">
+          {/* Bottom Stage Transition */}
+          <div className="flex justify-end pt-4 border-t border-slate-800">
             <button
               onClick={() => handleStageChange(2)}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
             >
-              <span>Next: Theory Quiz</span>
+              <span>Next: Phase 2 · Traditional Practice</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* STAGE 2: Theory Quiz & Verification */}
+      {/* ========================================================================================= */}
+      {/* PHASE 2: Traditional Practice (Score vs. Virtual Piano Keyboard)                          */}
+      {/* ========================================================================================= */}
       {currentStage === 2 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-          <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
-            <HelpCircle className="w-4 h-4" />
-            <span>Stage 2 · Check Your Understanding</span>
-          </div>
-
-          <h3 className="text-lg font-bold text-white">
-            {lesson.theory_quiz.question}
-          </h3>
-
-          <div className="space-y-3">
-            {lesson.theory_quiz.options.map((option, idx) => {
-              const isSelected = selectedOption === idx;
-              const isCorrect = idx === lesson.theory_quiz.answer;
-
-              let style = 'bg-slate-950 border-slate-800 hover:border-slate-700 text-slate-200';
-              if (quizSubmitted) {
-                if (isCorrect) {
-                  style = 'bg-emerald-500/20 border-emerald-500/60 text-emerald-200';
-                } else if (isSelected) {
-                  style = 'bg-rose-500/20 border-rose-500/60 text-rose-200';
-                }
-              } else if (isSelected) {
-                style = 'bg-indigo-600/20 border-indigo-500 text-indigo-200';
-              }
-
-              return (
-                <button
-                  key={idx}
-                  disabled={quizSubmitted}
-                  onClick={() => {
-                    setSelectedOption(idx);
-                    audioEngine.playUiSelect();
-                  }}
-                  className={`w-full text-left p-4 rounded-xl border text-sm font-medium transition-all ${style}`}
-                >
-                  <span className="font-mono text-xs text-slate-500 mr-2">
-                    {String.fromCharCode(65 + idx)}.
-                  </span>
-                  {option}
-                </button>
-              );
-            })}
-          </div>
-
-          {quizSubmitted && (
-            <div
-              className={`p-4 rounded-xl border text-sm ${
-                selectedOption === lesson.theory_quiz.answer
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
-              }`}
-            >
-              <div className="flex items-start gap-2">
-                <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
-                <p>{lesson.theory_quiz.explanation}</p>
-              </div>
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+              <Piano className="w-4 h-4" />
+              <span>Phase 2 · Traditional Score vs. Keyboard Practice</span>
             </div>
-          )}
+            {stage2Complete && (
+              <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" /> Exercise Mastered
+              </span>
+            )}
+          </div>
 
+          <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex items-start gap-3">
+            <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-300 leading-relaxed space-y-1">
+              <p>
+                <strong>Traditional Music Theory Training:</strong> Look at the engraved sheet music score below and press the matching notes on the virtual piano keyboard in order.
+              </p>
+              <p className="text-slate-400">
+                You can switch between <em>Note Sequence</em>, <em>Slow Metronome Pulse</em>, or <em>Original Tempo</em> using the mode buttons.
+              </p>
+            </div>
+          </div>
+
+          {/* Traditional Sight Reading Component */}
+          <TraditionalSightReading
+            exercise={stage2Exercise}
+            onComplete={(score) => {
+              setStage2Complete(true);
+              audioEngine.playSuccessChime();
+            }}
+          />
+
+          {/* Stage Footer Navigation */}
           <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
               onClick={() => handleStageChange(1)}
@@ -364,153 +463,206 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
               Back to Theory
             </button>
 
-            {!quizSubmitted ? (
-              <button
-                disabled={selectedOption === null}
-                onClick={() => {
-                  setQuizSubmitted(true);
-                  if (selectedOption === lesson.theory_quiz.answer) {
-                    audioEngine.playSuccessChime();
-                    confetti({
-                      particleCount: 50,
-                      spread: 60,
-                      origin: { y: 0.6 },
-                    });
-                  } else {
-                    audioEngine.playErrorBuzz();
-                  }
-                }}
-                className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-sm rounded-xl transition-all"
-              >
-                Submit Answer
-              </button>
-            ) : (
-              <button
-                onClick={() => handleStageChange(3)}
-                className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition-all"
-              >
-                <span>Next: LilyPond Syntax</span>
-                <ArrowRight className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* STAGE 3: LilyPond Syntax Reference Card */}
-      {currentStage === 3 && (
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-          <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
-            <Code2 className="w-4 h-4" />
-            <span>Stage 3 · LilyPond Notation Rules</span>
-          </div>
-
-          <h3 className="text-lg font-bold text-white">
-            Writing with LilyPond: <code className="text-indigo-400">{lesson.syntax_id.replace('syntax.', '')}</code>
-          </h3>
-
-          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-3">
-            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Example Syntax:</h4>
-            <pre className="font-mono text-sm text-indigo-300 bg-slate-900 p-3 rounded-lg overflow-x-auto">
-              {lesson.coding_challenge.solution_code}
-            </pre>
-            <p className="text-xs text-slate-400 leading-relaxed">
-              {lesson.coding_challenge.hint}
-            </p>
-          </div>
-
-          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
-              onClick={() => handleStageChange(2)}
-              className="text-xs text-slate-400 hover:text-white"
-            >
-              Back to Quiz
-            </button>
-            <button
-              onClick={() => handleStageChange(4)}
+              onClick={() => handleStageChange(3)}
               className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
             >
-              <span>Next: Coding Challenge</span>
+              <span>Next: Phase 3 · LilyPond Rules</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* STAGE 4: Interactive Coding Challenge with Monaco & Grader */}
-      {currentStage === 4 && (
-        <div className="space-y-6">
-          {/* Prompt card */}
-          <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-            <div>
-              <span className="text-[11px] font-bold text-indigo-400 uppercase tracking-wider">
-                Stage 4 · Hands-on Coding Challenge
-              </span>
-              <p className="text-sm font-medium text-slate-200 mt-1">
-                {lesson.coding_challenge.prompt}
-              </p>
-            </div>
-
-            <button
-              onClick={handleGradeCode}
-              className="px-5 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-emerald-600/30 transition-all shrink-0"
-            >
-              Check & Grade Code
-            </button>
+      {/* ========================================================================================= */}
+      {/* PHASE 3: LilyPond Notation Rules & Syntax                                                */}
+      {/* ========================================================================================= */}
+      {currentStage === 3 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+            <Code2 className="w-4 h-4" />
+            <span>Phase 3 · LilyPond Notation Rules & Syntax Bridge</span>
           </div>
 
-          {/* Grader Diagnostics Alert */}
-          {gradeResult && (
-            <div
-              className={`p-4 rounded-xl border flex items-start gap-3 ${
-                gradeResult.passed
-                  ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
-                  : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
-              }`}
-            >
-              {gradeResult.passed ? (
-                <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
-              ) : (
-                <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
-              )}
-              <div className="flex-1">
-                <p className="font-bold text-sm">{gradeResult.feedback}</p>
-                {gradeResult.diagnostics.length > 0 && (
-                  <ul className="text-xs mt-2 list-disc list-inside space-y-1 text-slate-300">
-                    {gradeResult.diagnostics.map((diag, i) => (
-                      <li key={i}>{diag}</li>
-                    ))}
-                  </ul>
-                )}
+          <h3 className="text-xl font-bold text-white">
+            Writing with LilyPond: <code className="text-indigo-400 font-mono">{lesson.syntax?.command || lesson.syntax_id}</code>
+          </h3>
+
+          <p className="text-sm text-slate-300 leading-relaxed">
+            {lesson.syntax?.explanation || lesson.theory_summary}
+          </p>
+
+          {/* Core Rules List */}
+          {lesson.syntax?.rules && (
+            <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Syntax Rules:</h4>
+              <ul className="text-xs text-slate-300 list-disc list-inside space-y-1.5">
+                {lesson.syntax.rules.map((rule, idx) => (
+                  <li key={idx}>{rule}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Code Example Preview */}
+          <div className="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+            <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Annotated LilyPond Code:</h4>
+            <pre className="font-mono text-sm text-indigo-300 bg-slate-900 p-3 rounded-lg overflow-x-auto">
+              {lesson.syntax?.exampleCode || lesson.coding_challenge.solution_code}
+            </pre>
+          </div>
+
+          {/* Cheat Sheet Table */}
+          {lesson.syntax?.cheatSheet && (
+            <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 space-y-2">
+              <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider">Command Reference:</h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+                {lesson.syntax.cheatSheet.map((item, idx) => (
+                  <div key={idx} className="bg-slate-900 p-2.5 rounded-lg border border-slate-800 flex items-center justify-between">
+                    <code className="text-indigo-400 font-mono font-semibold">{item.command}</code>
+                    <span className="text-slate-400">{item.description}</span>
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {/* Dual-Pane Editor & Preview */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[420px]">
-            <LilyPondEditor
-              code={userCode}
-              onChange={(newCode) => {
-                setUserCode(newCode);
-                runCompile(newCode);
-              }}
-              onCompile={() => runCompile(userCode)}
-              isCompiling={isCompiling}
-            />
+          {/* Syntax Comprehension Check Quiz */}
+          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex items-center gap-2 text-xs font-bold text-amber-400 uppercase tracking-wider">
+              <HelpCircle className="w-4 h-4" />
+              <span>Quick Check: Verify Before Writing Code</span>
+            </div>
 
-            <ScorePreview
-              svgPages={compileResult ? compileResult.pages : []}
-              logs={compileResult ? compileResult.logs : []}
-              isPlaying={isPlayingAudio}
-              onPlayAudio={handlePlayScore}
-              onStopAudio={handleStopScore}
-            />
+            <p className="text-sm font-semibold text-white">
+              {lesson.syntax?.quiz?.question || lesson.theory_quiz.question}
+            </p>
+
+            <div className="space-y-2.5">
+              {(lesson.syntax?.quiz?.options || lesson.theory_quiz.options).map((opt, idx) => {
+                const isSelected = syntaxQuizSelected === idx;
+                const isCorrect = idx === (lesson.syntax?.quiz?.answer ?? lesson.theory_quiz.answer);
+
+                let style = 'bg-slate-900 border-slate-800 hover:border-slate-700 text-slate-200';
+                if (syntaxQuizSubmitted) {
+                  if (isCorrect) style = 'bg-emerald-500/20 border-emerald-500/60 text-emerald-200 font-semibold';
+                  else if (isSelected) style = 'bg-rose-500/20 border-rose-500/60 text-rose-200';
+                } else if (isSelected) {
+                  style = 'bg-indigo-600/20 border-indigo-500 text-indigo-200 font-semibold';
+                }
+
+                return (
+                  <button
+                    key={idx}
+                    disabled={syntaxQuizSubmitted}
+                    onClick={() => {
+                      setSyntaxQuizSelected(idx);
+                      audioEngine.playUiSelect();
+                    }}
+                    className={`w-full text-left p-3.5 rounded-xl border text-xs sm:text-sm font-medium transition-all ${style}`}
+                  >
+                    <span className="font-mono text-xs text-slate-500 mr-2">
+                      {String.fromCharCode(65 + idx)}.
+                    </span>
+                    {opt}
+                  </button>
+                );
+              })}
+            </div>
+
+            {syntaxQuizSubmitted && (
+              <div
+                className={`p-3.5 rounded-xl border text-xs sm:text-sm ${
+                  syntaxQuizSelected === (lesson.syntax?.quiz?.answer ?? lesson.theory_quiz.answer)
+                    ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300'
+                    : 'bg-rose-500/10 border-rose-500/30 text-rose-300'
+                }`}
+              >
+                <div className="flex items-start gap-2">
+                  <Lightbulb className="w-4 h-4 shrink-0 mt-0.5" />
+                  <p>{lesson.syntax?.quiz?.explanation || lesson.theory_quiz.explanation}</p>
+                </div>
+              </div>
+            )}
+
+            {!syntaxQuizSubmitted && (
+              <div className="flex justify-end pt-2">
+                <button
+                  disabled={syntaxQuizSelected === null}
+                  onClick={() => {
+                    setSyntaxQuizSubmitted(true);
+                    if (syntaxQuizSelected === (lesson.syntax?.quiz?.answer ?? lesson.theory_quiz.answer)) {
+                      audioEngine.playSuccessChime();
+                      confetti({ particleCount: 50, spread: 50, origin: { y: 0.6 } });
+                    } else {
+                      audioEngine.playErrorBuzz();
+                    }
+                  }}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition-all"
+                >
+                  Verify Answer
+                </button>
+              </div>
+            )}
           </div>
 
-          {/* Metronome / Rhythm Assistant */}
-          <RhythmMetronome />
+          {/* Footer Navigation */}
+          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
+            <button
+              onClick={() => handleStageChange(2)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Back to Practice
+            </button>
 
-          <div className="flex justify-between items-center pt-4">
+            <button
+              onClick={() => handleStageChange(4)}
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
+            >
+              <span>Next: Phase 4 · LilyPond Reconstruction</span>
+              <ArrowRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================================= */}
+      {/* PHASE 4: LilyPond Reconstruction Challenge                                               */}
+      {/* ========================================================================================= */}
+      {currentStage === 4 && (
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <div className="flex items-center gap-2 text-indigo-400 text-xs font-bold uppercase tracking-wider">
+              <Sparkles className="w-4 h-4" />
+              <span>Phase 4 · LilyPond Score Reconstruction</span>
+            </div>
+            {stage4Complete && (
+              <span className="text-xs text-emerald-400 font-bold flex items-center gap-1">
+                <CheckCircle className="w-4 h-4" /> Reconstruction Passed
+              </span>
+            )}
+          </div>
+
+          <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex items-start gap-3">
+            <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-slate-300 leading-relaxed space-y-1">
+              <p>
+                <strong>Reconstruction Challenge:</strong> Match the target engraved sheet music. Choose between <em>Scaffolded</em> (partial code with hints) or <em>From Scratch</em> mode, use the clickable <strong>\ Bank</strong> to insert commands, and hit <strong>Check & Grade</strong>!
+              </p>
+            </div>
+          </div>
+
+          {/* Dedicated LilyPond Reconstruction Component */}
+          <LilyPondReconstruction
+            exercise={stage4Exercise}
+            onComplete={(score) => {
+              setStage4Complete(true);
+              audioEngine.playSuccessChime();
+            }}
+          />
+
+          {/* Footer Navigation */}
+          <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
               onClick={() => handleStageChange(3)}
               className="text-xs text-slate-400 hover:text-white"
@@ -520,269 +672,329 @@ export const LessonRunner: React.FC<LessonRunnerProps> = ({
 
             <button
               onClick={() => handleStageChange(5)}
-              className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl transition-all"
+              className="inline-flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-sm rounded-xl shadow-lg shadow-indigo-600/30 transition-all"
             >
-              <span>Next: Classical Capstone</span>
+              <span>Next: Phase 5 · Mixed Capstone</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           </div>
         </div>
       )}
 
-      {/* STAGE 5: Capstone Repertoire Excerpt */}
-      {currentStage === 5 && repPiece && (
+      {/* ========================================================================================= */}
+      {/* PHASE 5: Mixed Capstone (Write Code, Then Play on Piano!)                                */}
+      {/* ========================================================================================= */}
+      {currentStage === 5 && (
         <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-xl space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800/80 pb-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-4">
             <div>
               <div className="flex items-center gap-2 text-purple-400 text-xs font-bold uppercase tracking-wider mb-1">
                 <Music className="w-4 h-4" />
-                <span>Stage 5 · Classical Repertoire Capstone</span>
+                <span>Phase 5 · Mixed Capstone Challenge</span>
               </div>
-              <h3 className="text-xl font-extrabold text-white">
-                {repPiece.title}
+              <h3 className="text-xl sm:text-2xl font-extrabold text-white">
+                {lesson.capstone?.title || 'Classical Masterpiece Capstone'}
               </h3>
               <p className="text-xs sm:text-sm text-slate-400">
-                {repPiece.composer} · {repPiece.opus} ({repPiece.era}, {repPiece.year}) · Measures {repPiece.excerpt_measures}
+                {lesson.capstone?.composer || 'Composer'} · Meter: <strong className="text-slate-200">{lesson.capstone?.meter || '4/4'}</strong> · Key: <strong className="text-slate-200">{lesson.capstone?.key || 'C major'}</strong>
               </p>
             </div>
 
-            {/* Playback Button in Header */}
-            <div className="flex items-center gap-2">
-              {isRepPlaying ? (
-                <button
-                  onClick={handleStopRepScore}
-                  className="flex items-center gap-2 px-4 py-2 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-rose-600/30"
-                >
-                  <Square className="w-3.5 h-3.5 fill-white" />
-                  <span>Stop Score Audio</span>
-                </button>
-              ) : (
-                <button
-                  onClick={handlePlayRepScore}
-                  disabled={!repCompileResult || repCompileResult.midiNotes.length === 0}
-                  className={`flex items-center gap-2 px-4 py-2 text-xs font-bold rounded-xl transition-all ${
-                    capstoneUnlocked
-                      ? 'bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-400/40 animate-pulse'
-                      : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-lg shadow-indigo-600/20'
-                  }`}
-                >
-                  <Play className="w-3.5 h-3.5 fill-white" />
-                  <span>Play Classical Score</span>
-                </button>
-              )}
+            {/* Mode Switcher: Step 5A (Code Engraving) vs Step 5B (Piano Performance) */}
+            <div className="flex items-center gap-2 bg-slate-950 p-1.5 rounded-xl border border-slate-800">
+              <button
+                onClick={() => {
+                  setCapstonePhase('code');
+                  audioEngine.playUiSelect();
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  capstonePhase === 'code'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Code2 className="w-3.5 h-3.5" />
+                <span>Step 5A: Engrave Score</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setCapstonePhase('perform');
+                  audioEngine.playUiSelect();
+                }}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  capstonePhase === 'perform'
+                    ? 'bg-purple-600 text-white shadow-sm'
+                    : 'text-slate-400 hover:text-white'
+                }`}
+              >
+                <Piano className="w-3.5 h-3.5" />
+                <span>Step 5B: Play on Piano</span>
+              </button>
             </div>
           </div>
 
-          {/* Guidance banner */}
-          <div className="bg-slate-950/70 p-3.5 rounded-xl border border-slate-800 flex items-start gap-3">
-            <Lightbulb className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
-            <p className="text-xs text-slate-300 leading-relaxed">
-              Examine how LilyPond structures real classical engraving. Listen to the score, inspect the underlying LilyPond code syntax, and solve the score inspection challenge below to claim your master XP!
-            </p>
-          </div>
-
-          {/* View Mode Tabs (Score View vs LilyPond Code) */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 bg-slate-950 p-1 rounded-xl border border-slate-800">
-                <button
-                  onClick={() => {
-                    setRepActiveTab('sheet');
-                    audioEngine.playUiSelect();
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    repActiveTab === 'sheet'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <Music className="w-3.5 h-3.5" />
-                  <span>Sheet Music Engraving</span>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setRepActiveTab('code');
-                    audioEngine.playUiSelect();
-                  }}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    repActiveTab === 'code'
-                      ? 'bg-indigo-600 text-white shadow-sm'
-                      : 'text-slate-400 hover:text-white'
-                  }`}
-                >
-                  <FileCode className="w-3.5 h-3.5" />
-                  <span>LilyPond Source Code (.ly)</span>
-                </button>
+          {/* STEP 5A: Engrave Classical Score */}
+          {capstonePhase === 'code' ? (
+            <div className="space-y-6">
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex items-start gap-3">
+                <Lightbulb className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-300 leading-relaxed space-y-1">
+                  <p>
+                    <strong>Step 5A: Write the Master Score:</strong> {lesson.capstone?.codePrompt || 'Engrave the classical piece in LilyPond.'}
+                  </p>
+                  <p className="text-slate-400">
+                    Once compiled and verified, switch to <strong>Step 5B</strong> to perform your masterpiece on the virtual keyboard!
+                  </p>
+                </div>
               </div>
 
-              <span className="text-[11px] text-slate-500 hidden sm:inline">
-                Key: <strong className="text-slate-300">{repPiece.key}</strong> · Meter: <strong className="text-slate-300">{repPiece.meter}</strong>
-              </span>
-            </div>
+              {/* Grader Diagnostics Alert */}
+              {capstoneGradeResult && (
+                <div
+                  className={`p-4 rounded-xl border flex items-start gap-3 ${
+                    capstoneGradeResult.passed
+                      ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-200'
+                      : 'bg-rose-500/10 border-rose-500/30 text-rose-200'
+                  }`}
+                >
+                  {capstoneGradeResult.passed ? (
+                    <CheckCircle className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+                  ) : (
+                    <AlertCircle className="w-5 h-5 text-rose-400 shrink-0 mt-0.5" />
+                  )}
+                  <div className="flex-1">
+                    <p className="font-bold text-sm">{capstoneGradeResult.feedback}</p>
+                    {capstoneGradeResult.diagnostics.length > 0 && (
+                      <ul className="text-xs mt-2 list-disc list-inside space-y-1 text-slate-300">
+                        {capstoneGradeResult.diagnostics.map((diag, i) => (
+                          <li key={i}>{diag}</li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                </div>
+              )}
 
-            {/* Container for Score Sheet or LilyPond Code */}
-            {repActiveTab === 'sheet' ? (
-              <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                  <span>Interactive Engraved SVG Score</span>
-                  <span className="text-slate-500 italic">Scrollable view · Measures {repPiece.excerpt_measures}</span>
+              {/* Dual-Pane Editor & Live SVG Preview */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 min-h-[420px]">
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      LilyPond Code Editor
+                    </span>
+                    <button
+                      onClick={handleGradeCapstoneCode}
+                      className="px-4 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-500 hover:to-indigo-500 text-white font-bold text-xs rounded-lg shadow-md transition-all"
+                    >
+                      Check & Grade Code
+                    </button>
+                  </div>
+                  <LilyPondEditor
+                    code={capstoneCode}
+                    onChange={(newCode) => {
+                      setCapstoneCode(newCode);
+                      handleCompileCapstone(newCode);
+                    }}
+                    onCompile={() => handleCompileCapstone(capstoneCode)}
+                    isCompiling={isCompilingCapstone}
+                  />
                 </div>
 
-                <div className="w-full max-h-[420px] overflow-y-auto overflow-x-auto rounded-lg bg-slate-900 p-4 border border-slate-800/80">
-                  {repCompileResult && repCompileResult.pages.length > 0 ? (
-                    <div
-                      className="w-full min-w-[550px] flex justify-center"
-                      dangerouslySetInnerHTML={{ __html: repCompileResult.pages[0] }}
-                    />
-                  ) : (
-                    <div className="text-center py-12 text-slate-500 text-sm">
-                      Engraving classical score...
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                      Live Engraved Preview
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {isCapstonePlaying ? (
+                        <button
+                          onClick={handleStopCapstoneScore}
+                          className="px-3 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold rounded-lg flex items-center gap-1.5"
+                        >
+                          <Square className="w-3 h-3 fill-white" /> Stop Audio
+                        </button>
+                      ) : (
+                        <button
+                          onClick={handlePlayCapstoneScore}
+                          disabled={!capstoneCompileResult || capstoneCompileResult.midiNotes.length === 0}
+                          className="px-3 py-1 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-bold rounded-lg flex items-center gap-1.5"
+                        >
+                          <Play className="w-3 h-3 fill-white" /> Play Score Audio
+                        </button>
+                      )}
                     </div>
+                  </div>
+
+                  <ScorePreview
+                    svgPages={capstoneCompileResult ? capstoneCompileResult.pages : []}
+                    logs={capstoneCompileResult ? capstoneCompileResult.logs : []}
+                    isPlaying={isCapstonePlaying}
+                    onPlayAudio={handlePlayCapstoneScore}
+                    onStopAudio={handleStopCapstoneScore}
+                  />
+                </div>
+              </div>
+
+              {/* Quick switch to Step 5B */}
+              <div className="flex justify-end pt-2">
+                <button
+                  onClick={() => {
+                    setCapstonePhase('perform');
+                    audioEngine.playUiSelect();
+                  }}
+                  className="inline-flex items-center gap-2 px-5 py-2 bg-purple-600 hover:bg-purple-500 text-white font-bold text-xs rounded-xl shadow-md transition-all"
+                >
+                  <span>Ready to play? Switch to Step 5B (Piano Performance)</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* STEP 5B: Play on Virtual Piano Keyboard (3 Gradual Tiers) */
+            <div className="space-y-6">
+              <div className="bg-slate-950/70 p-4 rounded-xl border border-slate-800 flex items-start gap-3">
+                <Sparkles className="w-4 h-4 text-purple-400 shrink-0 mt-0.5" />
+                <div className="text-xs text-slate-300 leading-relaxed space-y-1">
+                  <p>
+                    <strong>Step 5B: Kinesthetic Performance:</strong> Now perform the masterpiece on the virtual keyboard!
+                  </p>
+                  <p className="text-slate-400">
+                    Begin with <strong>Note Sequence</strong> to master the fingerings, then try <strong>Slow Metronome</strong>, and finally master the <strong>Original Tempo</strong>!
+                  </p>
+                </div>
+              </div>
+
+              <TraditionalSightReading
+                exercise={capstonePerformanceExercise}
+                onComplete={(score) => {
+                  setCapstoneUnlocked(true);
+                  audioEngine.playSuccessChime();
+                }}
+              />
+            </div>
+          )}
+
+          {/* Theoretical Reflection & Analysis Challenge Card */}
+          {lesson.capstone && (
+            <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-5 space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-purple-400" />
+                  <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">
+                    Score Analysis & Reflection Challenge
+                  </h4>
+                </div>
+                {capstoneUnlocked ? (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
+                    <CheckCircle className="w-3 h-3" /> Mastered (+50 XP)
+                  </span>
+                ) : (
+                  <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold flex items-center gap-1">
+                    <Lock className="w-3 h-3" /> Unlocks Lesson Bonus XP
+                  </span>
+                )}
+              </div>
+
+              <p className="text-sm font-semibold text-white">
+                {lesson.capstone.reflectionQuestion}
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                {lesson.capstone.reflectionOptions.map((opt, idx) => {
+                  const isSelected = capstoneReflectionSelected === idx;
+                  const isCorrect = idx === lesson.capstone.reflectionAnswer;
+                  let cardStyle = 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700';
+
+                  if (capstoneReflectionSubmitted) {
+                    if (isCorrect) {
+                      cardStyle = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 font-semibold';
+                    } else if (isSelected) {
+                      cardStyle = 'border-rose-500/60 bg-rose-500/10 text-rose-200';
+                    }
+                  } else if (isSelected) {
+                    cardStyle = 'border-purple-500 bg-purple-500/10 text-purple-200 font-semibold';
+                  }
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        setCapstoneReflectionSelected(idx);
+                        setCapstoneReflectionSubmitted(false);
+                        audioEngine.playUiSelect();
+                      }}
+                      className={`flex items-start text-left gap-2.5 p-3 rounded-lg border text-xs transition-all ${cardStyle}`}
+                    >
+                      <span className="w-5 h-5 rounded-full border flex items-center justify-center shrink-0 text-[10px] font-bold">
+                        {String.fromCharCode(65 + idx)}
+                      </span>
+                      <span className="flex-1 leading-snug">{opt}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Reflection Verification */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+                <div>
+                  {capstoneReflectionSubmitted && (
+                    <p
+                      className={`text-xs font-medium ${
+                        capstoneReflectionSelected === lesson.capstone.reflectionAnswer
+                          ? 'text-emerald-400'
+                          : 'text-rose-400'
+                      }`}
+                    >
+                      {capstoneReflectionSelected === lesson.capstone.reflectionAnswer
+                        ? `✨ Correct! ${lesson.capstone.reflectionExplanation}`
+                        : `❌ Review the score and theory principles above, or click Reveal Answer.`}
+                    </p>
                   )}
                 </div>
-              </div>
-            ) : (
-              <div className="relative rounded-xl border border-slate-800 bg-slate-950 p-4">
-                <div className="flex items-center justify-between text-[11px] text-slate-400 mb-2">
-                  <span className="font-mono text-indigo-300 font-semibold">{repPiece.score_file}</span>
+
+                <div className="flex items-center gap-3 self-end sm:self-auto">
+                  {!capstoneUnlocked && (
+                    <button
+                      onClick={() => {
+                        setCapstoneReflectionSelected(lesson.capstone.reflectionAnswer);
+                        setCapstoneReflectionSubmitted(true);
+                        setCapstoneUnlocked(true);
+                        audioEngine.playUiClick();
+                      }}
+                      className="text-xs text-slate-400 hover:text-slate-200 underline"
+                    >
+                      Reveal Answer
+                    </button>
+                  )}
                   <button
                     onClick={() => {
-                      navigator.clipboard.writeText(repPiece.code);
-                      setCopiedCode(true);
-                      audioEngine.playUiClick();
-                      setTimeout(() => setCopiedCode(false), 2000);
+                      setCapstoneReflectionSubmitted(true);
+                      if (capstoneReflectionSelected === lesson.capstone.reflectionAnswer) {
+                        setCapstoneUnlocked(true);
+                        audioEngine.playSuccessChime();
+                        confetti({ particleCount: 70, spread: 60, origin: { y: 0.7 } });
+                      } else {
+                        audioEngine.playErrorBuzz();
+                      }
                     }}
-                    className="flex items-center gap-1 text-xs text-indigo-400 hover:text-indigo-300 font-semibold transition-colors"
+                    disabled={capstoneReflectionSelected === null}
+                    className="px-4 py-2 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition-all shadow-md shadow-purple-600/20"
                   >
-                    {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    <span>{copiedCode ? 'Copied!' : 'Copy Code'}</span>
+                    Verify Analysis
                   </button>
                 </div>
-
-                <div className="w-full max-h-[420px] overflow-y-auto overflow-x-auto rounded-lg bg-slate-900 p-4 border border-slate-800/80 font-mono text-xs leading-relaxed text-indigo-200">
-                  <pre className="whitespace-pre">{repPiece.code}</pre>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Active Learning Capstone Challenge Card */}
-          <div className="bg-slate-950/90 border border-slate-800 rounded-xl p-5 space-y-4">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-purple-400" />
-                <h4 className="text-xs font-bold text-purple-300 uppercase tracking-wider">
-                  Score Inspection & Analysis Challenge
-                </h4>
-              </div>
-              {capstoneUnlocked ? (
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 font-semibold flex items-center gap-1">
-                  <CheckCircle className="w-3 h-3" /> Score Mastered
-                </span>
-              ) : (
-                <span className="text-[11px] px-2.5 py-0.5 rounded-full bg-amber-500/10 text-amber-400 border border-amber-500/30 font-semibold flex items-center gap-1">
-                  <Lock className="w-3 h-3" /> Unlocks Playback & Bonus XP
-                </span>
-              )}
-            </div>
-
-            <p className="text-sm font-semibold text-white">
-              {capstoneChallenge.question}
-            </p>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {capstoneChallenge.options.map((opt, idx) => {
-                const isSelected = capstoneSelectedOption === idx;
-                const isCorrect = idx === capstoneChallenge.answer;
-                let cardStyle = 'border-slate-800 bg-slate-900/60 text-slate-300 hover:border-slate-700';
-
-                if (capstoneSubmitted) {
-                  if (isCorrect) {
-                    cardStyle = 'border-emerald-500/60 bg-emerald-500/10 text-emerald-200 font-semibold';
-                  } else if (isSelected) {
-                    cardStyle = 'border-rose-500/60 bg-rose-500/10 text-rose-200';
-                  }
-                } else if (isSelected) {
-                  cardStyle = 'border-indigo-500 bg-indigo-500/10 text-indigo-200 font-semibold';
-                }
-
-                return (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      setCapstoneSelectedOption(idx);
-                      setCapstoneSubmitted(false);
-                      audioEngine.playUiSelect();
-                    }}
-                    className={`flex items-start text-left gap-2.5 p-3 rounded-lg border text-xs transition-all ${cardStyle}`}
-                  >
-                    <span className="w-5 h-5 rounded-full border flex items-center justify-center shrink-0 text-[10px] font-bold">
-                      {String.fromCharCode(65 + idx)}
-                    </span>
-                    <span className="flex-1 leading-snug">{opt}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {/* Verification and Feedback */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
-              <div>
-                {capstoneSubmitted && (
-                  <p className={`text-xs font-medium ${capstoneUnlocked ? 'text-emerald-400' : 'text-rose-400'}`}>
-                    {capstoneUnlocked
-                      ? `✨ Correct! ${capstoneChallenge.explanation}`
-                      : `❌ Not quite. Examine the score or source code above, or click Reveal Answer.`}
-                  </p>
-                )}
-              </div>
-
-              <div className="flex items-center gap-3 self-end sm:self-auto">
-                {!capstoneUnlocked && (
-                  <button
-                    onClick={() => {
-                      setCapstoneSelectedOption(capstoneChallenge.answer);
-                      setCapstoneSubmitted(true);
-                      setCapstoneUnlocked(true);
-                      audioEngine.playUiClick();
-                    }}
-                    className="text-xs text-slate-400 hover:text-slate-200 underline"
-                  >
-                    Reveal Answer
-                  </button>
-                )}
-                <button
-                  onClick={() => {
-                    setCapstoneSubmitted(true);
-                    if (capstoneSelectedOption === capstoneChallenge.answer) {
-                      setCapstoneUnlocked(true);
-                      audioEngine.playSuccessChime();
-                      confetti({
-                        particleCount: 60,
-                        spread: 50,
-                        origin: { y: 0.7 },
-                      });
-                    } else {
-                      audioEngine.playErrorBuzz();
-                    }
-                  }}
-                  disabled={capstoneSelectedOption === null}
-                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-bold text-xs rounded-lg transition-all shadow-md shadow-indigo-600/20"
-                >
-                  Verify Analysis
-                </button>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Footer Navigation */}
+          {/* Final Lesson Completion Button */}
           <div className="flex justify-between items-center pt-4 border-t border-slate-800">
             <button
               onClick={() => handleStageChange(4)}
               className="text-xs text-slate-400 hover:text-white"
             >
-              Back to Challenge
+              Back to Reconstruction
             </button>
 
             <button
