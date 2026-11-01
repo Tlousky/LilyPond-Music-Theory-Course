@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Header } from './components/layout/Header';
 import { SkillTree } from './components/curriculum/SkillTree';
 import { LessonRunner } from './components/lesson/LessonRunner';
+import { SightReadingGym } from './components/sightreading/SightReadingGym';
 import { RepertoireBrowser } from './components/repertoire/RepertoireBrowser';
 import { FreePlayground } from './components/playground/FreePlayground';
 import { userProgressStore, UserState } from './lib/gamification/UserProgressStore';
@@ -10,7 +11,7 @@ import { Lesson } from './data/curriculumData';
 
 export const App: React.FC = () => {
   const [userState, setUserState] = useState<UserState>(userProgressStore.getState());
-  const [activeTab, setActiveTab] = useState<'curriculum' | 'repertoire' | 'playground'>('curriculum');
+  const [activeTab, setActiveTab] = useState<'curriculum' | 'sightreading' | 'repertoire' | 'playground'>('curriculum');
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [instrument, setInstrument] = useState<InstrumentType>('piano');
 
@@ -63,6 +64,8 @@ export const App: React.FC = () => {
             userState={userState}
             onSelectLesson={(lesson) => setSelectedLesson(lesson)}
           />
+        ) : activeTab === 'sightreading' ? (
+          <SightReadingGym />
         ) : activeTab === 'repertoire' ? (
           <RepertoireBrowser />
         ) : (

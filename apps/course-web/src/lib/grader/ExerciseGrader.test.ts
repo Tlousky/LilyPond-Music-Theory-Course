@@ -46,4 +46,29 @@ describe('ExerciseGrader', () => {
     const emptyResult = exerciseGrader.gradeRhythmTap([], [500, 1000]);
     expect(emptyResult.passed).toBe(false);
   });
+
+  it('grades score reconstruction accurately against target code', async () => {
+    const targetCode = `\\version "2.24.0"
+\\relative c' {
+  \\clef treble
+  c4 d e f
+}`;
+    const correctUserCode = `\\version "2.24.0"
+\\relative c' {
+  \\clef treble
+  c4 d e f
+}`;
+    const result = await exerciseGrader.gradeReconstruction(correctUserCode, targetCode);
+    expect(result.passed).toBe(true);
+    expect(result.score).toBe(100);
+
+    const wrongUserCode = `\\version "2.24.0"
+\\relative c' {
+  \\clef treble
+  c4 d g2
+}`;
+    const failResult = await exerciseGrader.gradeReconstruction(wrongUserCode, targetCode);
+    expect(failResult.passed).toBe(false);
+    expect(failResult.diagnostics.length).toBeGreaterThan(0);
+  });
 });

@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import { UserState } from '../../lib/gamification/UserProgressStore';
 import { InstrumentType, audioEngine } from '../../lib/audio/SoundFontAudioEngine';
-import { Flame, Award, BookOpen, Music, Code2, RotateCcw, Volume2, VolumeX } from 'lucide-react';
+import { Flame, Award, BookOpen, Music, Code2, RotateCcw, Volume2, VolumeX, Piano } from 'lucide-react';
 
 interface HeaderProps {
   userState: UserState;
-  activeTab: 'curriculum' | 'repertoire' | 'playground';
-  onSelectTab: (tab: 'curriculum' | 'repertoire' | 'playground') => void;
+  activeTab: 'curriculum' | 'sightreading' | 'repertoire' | 'playground';
+  onSelectTab: (tab: 'curriculum' | 'sightreading' | 'repertoire' | 'playground') => void;
   instrument: InstrumentType;
   onChangeInstrument: (inst: InstrumentType) => void;
   onResetProgress: () => void;
@@ -57,6 +57,17 @@ export const Header: React.FC<HeaderProps> = ({
           >
             <BookOpen className="w-4 h-4" />
             Curriculum
+          </button>
+          <button
+            onClick={() => onSelectTab('sightreading')}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg transition-all ${
+              activeTab === 'sightreading'
+                ? 'bg-indigo-600 text-white shadow-sm'
+                : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Piano className="w-4 h-4" />
+            Sight Reading
           </button>
           <button
             onClick={() => onSelectTab('repertoire')}

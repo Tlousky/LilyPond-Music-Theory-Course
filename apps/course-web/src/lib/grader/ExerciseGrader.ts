@@ -169,6 +169,109 @@ export class ExerciseGrader {
       detectedNotes: []
     };
   }
+
+  /**
+   * Compares a student's LilyPond reconstruction against a target score.
+   */
+  public async gradeReconstruction(
+    userCode: string,
+    targetCode: string
+  ): Promise<GradeResult> {
+    const diagnostics: string[] = [];
+    const [userRes, targetRes] = await Promise.all([
+      lilypondCompiler.compile(userCode),
+      lilypondCompiler.compile(targetCode),
+    ]);
+
+    if (!userRes.ok) {
+      return {
+        passed: false,
+        score: 0,
+        feedback: "Syntax Error: Your reconstructed code failed to compile.",
+        diagnostics: userRes.logs.filter((l) => l.includes('error')),
+        detectedNotes: [],
+      };
+    }
+
+    const userNotes = userRes.midiNotes;
+    const targetNotes = targetRes.midiNotes;
+    const detectedNotes = userNotes.map((n) => n.pitch);
+
+    if (userNotes.length === 0) {
+      return {
+        passed: false,
+        score: 0,
+        feedback: "No notes detected. Write LilyPond notes to match the target score.",
+        diagnostics: ["The score contains no notes."],
+        detectedNotes: [],
+      };
+    }
+
+    if (userNotes.length !== targetNotes.length) {
+      diagnostics.push(
+        `Note count difference: Expected ${targetNotes.length} notes, but found ${userNotes.length}.`
+      );
+    }
+
+    let pitchMatches = 0;
+    let durationMatches = 0;
+    const checkCount = Math.max(userNotes.length, targetNotes.length);
+
+    for (let i = 0; i < checkCount; i++) {
+      const targetNote = targetNotes[i];
+      const userNote = userNotes[i];
+
+      if (!targetNote) {
+        diagnostics.push(`Note ${i + 1}: Extra unexpected note '${userNote.pitch}'.`);
+        continue;
+      }
+      if (!userNote) {
+        diagnostics.push(`Note ${i + 1}: Missing note (expected '${targetNote.pitch}').`);
+        continue;
+      }
+
+      if (userNote.pitch.toLowerCase() === targetNote.pitch.toLowerCase()) {
+        pitchMatches++;
+      } else {
+        diagnostics.push(
+          `Note ${i + 1}: Expected pitch '${targetNote.pitch}', but got '${userNote.pitch}'.`
+        );
+      }
+
+      if (userNote.duration === targetNote.duration) {
+        durationMatches++;
+      } else {
+        diagnostics.push(
+          `Note ${i + 1}: Expected duration '${targetNote.duration}', but got '${userNote.duration}'.`
+        );
+      }
+    }
+
+    if (targetCode.includes('\\clef bass') && !userCode.includes('\\clef bass')) {
+      diagnostics.push("Target score uses \\clef bass, but \\clef bass was not specified in your code.");
+    }
+    if (targetCode.includes('\\time') && !userCode.includes('\\time')) {
+      diagnostics.push("Missing \\time signature command matching the target score.");
+    }
+    if (targetCode.includes('\\key') && !userCode.includes('\\key')) {
+      diagnostics.push("Missing \\key signature command matching the target score.");
+    }
+
+    const totalPoints = targetNotes.length * 2;
+    const earnedPoints = pitchMatches + durationMatches;
+    const score = Math.max(0, Math.round((earnedPoints / Math.max(1, totalPoints)) * 100));
+    const passed = diagnostics.length === 0 && score === 100;
+
+    return {
+      passed,
+      score,
+      feedback: passed
+        ? "Flawless Reconstruction! Your LilyPond code perfectly replicates the target score. 🏆"
+        : `Reconstruction differs from target score (${score}% match). Check diagnostics below.`,
+      diagnostics,
+      detectedNotes,
+    };
+  }
 }
 
 export const exerciseGrader = new ExerciseGrader();

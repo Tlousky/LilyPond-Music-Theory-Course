@@ -5,13 +5,19 @@
 
 import { renderClefSvg, renderAccidentalSvg } from './MusicGlyphs';
 
+export interface MidiNote {
+  pitch: string;
+  midi: number;
+  duration: number;
+}
+
 export interface CompileResult {
   ok: boolean;
   pages: string[];
   logs: string[];
   errors: number;
   warnings: number;
-  midiNotes: Array<{ pitch: string; midi: number; duration: number }>;
+  midiNotes: MidiNote[];
 }
 
 export class LilyPondWasmCompiler {
