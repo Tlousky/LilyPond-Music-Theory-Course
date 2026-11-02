@@ -4,6 +4,7 @@
  */
 
 import { lilypondCompiler } from '../lilypond/LilyPondWasmCompiler';
+import { pitchToMidi } from '../audio/SoundFontAudioEngine';
 
 export interface GradeResult {
   passed: boolean;
@@ -71,15 +72,14 @@ export class ExerciseGrader {
         continue;
       }
 
-      // Check letter name match (ignoring octave if user forgot quotes)
-      const expLetter = exp.replace(/\d+/, '');
-      const gotLetter = got.replace(/\d+/, '');
+      const expMidi = pitchToMidi(exp);
+      const gotMidi = compileResult.midiNotes[i]?.midi ?? pitchToMidi(got);
 
-      if (exp === got) {
+      if (exp === got || expMidi === gotMidi) {
         matchCount++;
-      } else if (expLetter === gotLetter) {
+      } else if (expMidi % 12 === gotMidi % 12) {
         diagnostics.push(
-          `Note ${i + 1}: Correct pitch class (${gotLetter.toUpperCase()}), but in wrong octave! (Expected ${exp.toUpperCase()}, received ${got.toUpperCase()}). Check apostrophe ' or comma ,.`
+          `Note ${i + 1}: Correct pitch class, but in wrong octave! (Expected ${exp.toUpperCase()}, received ${got.toUpperCase()}). Check apostrophe ' or comma ,.`
         );
       } else {
         diagnostics.push(
@@ -230,7 +230,7 @@ export class ExerciseGrader {
         continue;
       }
 
-      if (userNote.pitch.toLowerCase() === targetNote.pitch.toLowerCase()) {
+      if (userNote.pitch.toLowerCase() === targetNote.pitch.toLowerCase() || userNote.midi === targetNote.midi) {
         pitchMatches++;
       } else {
         diagnostics.push(
@@ -238,7 +238,7 @@ export class ExerciseGrader {
         );
       }
 
-      if (userNote.duration === targetNote.duration) {
+      if (userNote.duration === targetNote.duration || Math.abs(userNote.durationBeats - targetNote.durationBeats) < 0.05) {
         durationMatches++;
       } else {
         diagnostics.push(

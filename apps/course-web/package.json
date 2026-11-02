@@ -4,12 +4,18 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "copy-wasm": "node scripts/copy-wasm.mjs",
+    "predev": "node scripts/copy-wasm.mjs",
     "dev": "vite",
+    "prebuild": "node scripts/copy-wasm.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
+    "pretest": "node scripts/copy-wasm.mjs",
     "test": "vitest run"
   },
   "dependencies": {
+    "@sightread/lilypond-wasm": "^0.2.0",
+    "@tonejs/midi": "^2.0.28",
     "canvas-confetti": "^1.9.4",
     "clsx": "^2.1.1",
     "lucide-react": "^1.16.0",

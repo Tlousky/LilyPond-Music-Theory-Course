@@ -30,22 +30,18 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
     expect(result.ok).toBe(true);
     expect(result.pages.length).toBeGreaterThan(0);
     expect(result.pages[0]).toContain('<svg');
-    expect(result.pages[0]).toContain('class="clef-glyph"');
-    expect(result.pages[0]).toContain(SMUFL_GLYPHS.gClef);
+    expect(result.pages[0]).toContain('class="lilypond-score"');
+    expect(result.pages[0]).toContain('xlink:href="textedit:');
     expect(result.midiNotes.length).toBe(4);
     expect(result.midiNotes[0].pitch).toBe('C4');
-
-    // Verify Issue #9: Proper clef scaling and non-overlapping time signature
-    expect(result.pages[0]).toMatch(/scale\(0\.019\d*,\s*-0\.019\d*\)/);
-    expect(result.pages[0]).toContain('text-anchor="middle"');
 
     // Verify Issue #10: Interactive note attributes for click playback
     expect(result.pages[0]).toContain('data-midi="60"');
     expect(result.pages[0]).toContain('data-pitch="C4"');
-    expect(result.pages[0]).toContain('class="interactive-note"');
+    expect(result.pages[0]).toContain('interactive-note');
   });
 
-  it('handles bass clef and accidentals with SMuFL vector glyphs', async () => {
+  it('handles bass clef and accidentals with authentic LilyPond engraving', async () => {
     const src = `\\version "2.24.0"
 \\relative c {
   \\clef bass
@@ -55,12 +51,14 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
 
     expect(result.ok).toBe(true);
     expect(result.pages[0]).toContain('<svg');
-    expect(result.pages[0]).toContain('class="clef-glyph"');
-    expect(result.pages[0]).toContain('class="accidental-glyph"');
+    expect(result.pages[0]).toContain('class="lilypond-score"');
     expect(result.midiNotes.length).toBe(4);
     expect(result.midiNotes[0].pitch).toBe('C3');
+    expect(result.midiNotes[0].midi).toBe(48);
     expect(result.midiNotes[1].pitch).toBe('CIS3');
-    expect(result.midiNotes[3].pitch).toBe('EES3');
+    expect(result.midiNotes[1].midi).toBe(49);
+    expect(result.midiNotes[3].midi).toBe(51); // Eb3 / D#3
+    expect(['EES3', 'DIS3']).toContain(result.midiNotes[3].pitch);
   });
 
   it('compiles snippet from issue 12 with full width and responsive attributes', async () => {
@@ -114,9 +112,6 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
     expect(result.midiNotes[3].duration).toBe(1);
     expect(result.midiNotes[3].durationBeats).toBe(4);
     expect(result.midiNotes[3].timeBeats).toBe(5.0);
-
-    // Augmentation dot rendered in SVG
-    expect(result.pages[0]).toContain('class="note-dot"');
   });
 
   it('accurately parses chords with simultaneous start times (Issue #14)', async () => {
@@ -174,14 +169,18 @@ describe('LilyPondWasmCompiler & MusicGlyphs', () => {
     const result = await lilypondCompiler.compile(src);
     expect(result.ok).toBe(true);
 
-    // Upper treble melody: 6 notes starting at beat 0
-    expect(result.midiNotes[0].pitch).toBe('D5');
-    expect(result.midiNotes[0].timeBeats).toBe(0);
-    expect(result.midiNotes[0].durationBeats).toBe(1);
+    // Simultaneous start at beat 0:
+    // Upper treble melody starts at beat 0 with D5
+    const trebleD = result.midiNotes.find(n => n.pitch === 'D5');
+    expect(trebleD).toBeDefined();
+    expect(trebleD?.timeBeats).toBe(0);
+    expect(trebleD?.durationBeats).toBe(1);
 
-    expect(result.midiNotes[1].pitch).toBe('G4');
-    expect(result.midiNotes[1].timeBeats).toBe(1);
-    expect(result.midiNotes[1].durationBeats).toBe(0.5);
+    // Upper treble second note at beat 1 with G4
+    const trebleG = result.midiNotes.find(n => n.pitch === 'G4');
+    expect(trebleG).toBeDefined();
+    expect(trebleG?.timeBeats).toBe(1);
+    expect(trebleG?.durationBeats).toBe(0.5);
 
     // Lower bass accompaniment: 3 chord notes starting at beat 0
     const bassG = result.midiNotes.find(n => n.pitch === 'G3');

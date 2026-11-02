@@ -22,9 +22,19 @@ export const ScorePreview: React.FC<ScorePreviewProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
 
   const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
-    const target = (e.target as Element).closest('a[href^="textedit:"], .interactive-note');
+    const target = (e.target as Element).closest('a[href^="textedit:"], a[*|href^="textedit:"], .interactive-note');
     if (target) {
       e.preventDefault();
+
+      const href = target.getAttribute('href') || target.getAttribute('xlink:href') || '';
+      const lineColMatch = href.match(/:(\d+):(\d+)/);
+      if (lineColMatch && onNoteClick) {
+        onNoteClick(parseInt(lineColMatch[1], 10), parseInt(lineColMatch[2], 10));
+      } else if (onNoteClick) {
+        const line = parseInt(target.getAttribute('data-line') || '1', 10);
+        const col = parseInt(target.getAttribute('data-col') || '1', 10);
+        onNoteClick(line, col);
+      }
 
       // Play note pitch immediately via Web Audio engine
       const midiAttr = target.getAttribute('data-midi');
@@ -36,13 +46,6 @@ export const ScorePreview: React.FC<ScorePreviewProps> = ({
         }
       } else if (pitchAttr) {
         audioEngine.playNote(pitchAttr, 0.7);
-      }
-
-      // If note-click navigation callback is provided, jump to editor line/col
-      if (onNoteClick) {
-        const line = parseInt(target.getAttribute('data-line') || '1', 10);
-        const col = parseInt(target.getAttribute('data-col') || '1', 10);
-        onNoteClick(line, col);
       }
     }
   };

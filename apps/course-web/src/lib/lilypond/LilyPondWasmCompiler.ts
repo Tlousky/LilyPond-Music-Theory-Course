@@ -1,9 +1,12 @@
 /**
- * LilyPondWasmCompiler.ts - High-Performance In-Browser LilyPond Engraving & Compilation
- * Generates vector SVG scores with Emmentaler music glyphs and interactive textedit:// links.
+ * LilyPondWasmCompiler.ts - Official WebAssembly In-Browser LilyPond Engraving & Compilation
+ * Powered by @sightread/lilypond-wasm (GNU LilyPond v2.26 WebAssembly) and @tonejs/midi.
+ * Generates vector SVG scores with authentic Emmentaler glyphs and Type-1 binary MIDI files.
  */
 
-import { renderClefSvg, renderAccidentalSvg } from './MusicGlyphs';
+import { createReusableCompiler, type ReusableCompiler, LilyPondCompileError } from '@sightread/lilypond-wasm';
+import toneMidi from '@tonejs/midi';
+const { Midi } = toneMidi;
 
 export interface MidiNote {
   pitch: string;
@@ -21,424 +24,279 @@ export interface CompileResult {
   errors: number;
   warnings: number;
   midiNotes: MidiNote[];
-}
-
-export interface ParsedScoreNote extends MidiNote {
-  line: number;
-  col: number;
-}
-
-const SEMITONES: Record<string, number> = {
-  c: 0, cis: 1, cisis: 2, ces: -1, ceses: -2,
-  d: 2, dis: 3, des: 1,
-  e: 4, eis: 5, ees: 3, es: 3,
-  f: 5, fis: 6, fisis: 7, fes: 4,
-  g: 7, gis: 8, ges: 6,
-  a: 9, ais: 10, aes: 8, as: 8,
-  b: 11, bis: 12, bes: 10
-};
-
-function computeDurationBeats(dur: number, dots: number): number {
-  const base = 4 / (dur || 4);
-  let multiplier = 1;
-  let factor = 0.5;
-  for (let i = 0; i < dots; i++) {
-    multiplier += factor;
-    factor /= 2;
-  }
-  return base * multiplier;
-}
-
-function parseReferencePitch(relArg?: string): number {
-  if (!relArg) return 60; // default c' (C4)
-  const baseLetter = relArg[0].toLowerCase();
-  const octaveMarks = relArg.slice(1);
-  const baseSemitone = SEMITONES[baseLetter] ?? 0;
-  let oct = 3;
-  for (const ch of octaveMarks) {
-    if (ch === "'") oct++;
-    if (ch === ',') oct--;
-  }
-  return (oct + 1) * 12 + baseSemitone;
-}
-
-function calculatePitchMidi(pitchName: string, octaveMarks: string, previousMidi: number, isRelative: boolean): number {
-  const baseSemitone = SEMITONES[pitchName] ?? 0;
-  if (isRelative) {
-    let cand = Math.floor(previousMidi / 12) * 12 + baseSemitone;
-    while (cand - previousMidi > 6) cand -= 12;
-    while (previousMidi - cand > 6) cand += 12;
-    for (const ch of octaveMarks) {
-      if (ch === "'") cand += 12;
-      if (ch === ',') cand -= 12;
-    }
-    return cand;
-  } else {
-    let oct = 3;
-    for (const ch of octaveMarks) {
-      if (ch === "'") oct++;
-      if (ch === ',') oct--;
-    }
-    return (oct + 1) * 12 + baseSemitone;
-  }
-}
-
-function extractStaffBlocks(src: string): string[] {
-  const staffBlocks: string[] = [];
-  const regex = /\\new Staff\s*(?:\\with\s*\{[^}]*\})?\s*([<{])/g;
-  let match: RegExpExecArray | null;
-  while ((match = regex.exec(src)) !== null) {
-    const startChar = match[1];
-    const endChar = startChar === '<' ? '>' : '}';
-    let depth = 1;
-    let idx = regex.lastIndex;
-    const startIndex = idx;
-    while (idx < src.length && depth > 0) {
-      if (src[idx] === startChar) depth++;
-      else if (src[idx] === endChar) depth--;
-      idx++;
-    }
-    staffBlocks.push(src.slice(startIndex, idx - 1));
-  }
-  return staffBlocks;
-}
-
-function parseMusicSegment(
-  segmentSrc: string,
-  _fullSrc: string,
-  parentIsRelative: boolean,
-  parentRefMidi: number
-): ParsedScoreNote[] {
-  const relMatch = segmentSrc.match(/\\relative\s*([a-g]['',]*)?/);
-  const isRelative = relMatch ? true : parentIsRelative;
-  let prevMidi = relMatch ? parseReferencePitch(relMatch[1]) : parentRefMidi;
-
-  // Polyphony inside segment: << { v1 } \\ { v2 } >>
-  const polyMatch = segmentSrc.match(/<<\s*\{([^}]+)\}\s*\\\\\s*\{([^}]+)\}\s*>>/);
-  if (polyMatch) {
-    const v1Notes = parseMusicSegment(polyMatch[1], _fullSrc, isRelative, prevMidi);
-    const v2Notes = parseMusicSegment(polyMatch[2], _fullSrc, isRelative, prevMidi);
-    return [...v1Notes, ...v2Notes];
-  }
-
-  // Remove non-note commands while preserving notes, durations, and rests
-  const cleaned = segmentSrc
-    .replace(/\\version\s*"[^"]*"/g, '')
-    .replace(/\\header\s*\{[^}]*\}/g, '')
-    .replace(/\\clef\s+"?[a-zA-Z_0-9]+"?/g, '')
-    .replace(/\\key\s+[a-g](?:is|es)?\s*\\[a-zA-Z]+/g, '')
-    .replace(/\\time\s+\d+\/\d+/g, '')
-    .replace(/\\relative\s*[a-g]['',]*\s*\{/g, '{')
-    .replace(/\\repeat\s+volta\s+\d+\s*\{/g, '{')
-    .replace(/%[^\n]*/g, '')
-    .replace(/\\[a-zA-Z_]+/g, '');
-
-  let curDur = 4;
-  let curDots = 0;
-  let curTimeBeats = 0;
-  const notes: ParsedScoreNote[] = [];
-
-  const tokenRegex = /(<[^>]+>\s*(?:\d+)?(?:\.+)?)|(\b[rR]\s*(?:\d+)?(?:\.+)?)|(\b[a-g](?:is(?:is)?|es(?:es)?)?['',]*(?:\d+)?(?:\.+)?(?=[\s|><\}\)\(\]~\\%]|$))/g;
-
-  let m: RegExpExecArray | null;
-  while ((m = tokenRegex.exec(cleaned)) !== null) {
-    const tok = m[0].trim();
-    if (!tok) continue;
-
-    const charIndexInCleaned = m.index;
-    const linesBefore = cleaned.slice(0, charIndexInCleaned).split('\n');
-    const line = linesBefore.length;
-    const col = linesBefore[linesBefore.length - 1].length + 1;
-
-    // 1. Chord
-    const chordMatch = tok.match(/^<([^>]+)>\s*(\d+)?(\.+)?$/);
-    if (chordMatch) {
-      if (chordMatch[2]) {
-        curDur = parseInt(chordMatch[2], 10);
-        curDots = chordMatch[3] ? chordMatch[3].length : 0;
-      }
-      const durBeats = computeDurationBeats(curDur, curDots);
-      const innerNotes = [...chordMatch[1].matchAll(/([a-g](?:is(?:is)?|es(?:es)?)?)(['',]*)/g)];
-      let chordFirstMidi: number | null = null;
-
-      for (const inNote of innerNotes) {
-        const pName = inNote[1].toLowerCase();
-        const octMarks = inNote[2];
-        const midi = calculatePitchMidi(pName, octMarks, prevMidi, isRelative);
-        if (chordFirstMidi === null) chordFirstMidi = midi;
-        prevMidi = midi;
-
-        const oct = Math.floor(midi / 12) - 1;
-        notes.push({
-          pitch: `${pName.toUpperCase()}${oct}`,
-          midi,
-          duration: curDur,
-          dots: curDots,
-          durationBeats: durBeats,
-          timeBeats: curTimeBeats,
-          line,
-          col
-        });
-      }
-      if (chordFirstMidi !== null) prevMidi = chordFirstMidi;
-      curTimeBeats += durBeats;
-      continue;
-    }
-
-    // 2. Rest
-    const restMatch = tok.match(/^[rR]\s*(\d+)?(\.+)?$/);
-    if (restMatch) {
-      if (restMatch[1]) {
-        curDur = parseInt(restMatch[1], 10);
-        curDots = restMatch[2] ? restMatch[2].length : 0;
-      }
-      const durBeats = computeDurationBeats(curDur, curDots);
-      curTimeBeats += durBeats;
-      continue;
-    }
-
-    // 3. Single Note
-    const noteMatch = tok.match(/^([a-g](?:is(?:is)?|es(?:es)?)?)(['',]*)(\d+)?(\.+)?$/);
-    if (noteMatch) {
-      const pName = noteMatch[1].toLowerCase();
-      const octMarks = noteMatch[2];
-      if (noteMatch[3]) {
-        curDur = parseInt(noteMatch[3], 10);
-        curDots = noteMatch[4] ? noteMatch[4].length : 0;
-      }
-      const durBeats = computeDurationBeats(curDur, curDots);
-      const midi = calculatePitchMidi(pName, octMarks, prevMidi, isRelative);
-      prevMidi = midi;
-
-      const oct = Math.floor(midi / 12) - 1;
-      notes.push({
-        pitch: `${pName.toUpperCase()}${oct}`,
-        midi,
-        duration: curDur,
-        dots: curDots,
-        durationBeats: durBeats,
-        timeBeats: curTimeBeats,
-        line,
-        col
-      });
-      curTimeBeats += durBeats;
-    }
-  }
-
-  return notes;
+  midiBytes?: Uint8Array;
 }
 
 export class LilyPondWasmCompiler {
+  private compiler: ReusableCompiler | null = null;
+  private isPreloading: boolean = false;
   private isReady: boolean = false;
 
   constructor() {
-    this.isReady = true;
+    // Reusable compiler is lazily initialized or preloaded
+  }
+
+  private getCompiler(): ReusableCompiler {
+    if (!this.compiler) {
+      this.compiler = createReusableCompiler();
+      this.isReady = true;
+    }
+    return this.compiler;
   }
 
   /**
-   * Compiles LilyPond source code into interactive SVG pages.
+   * Preload the ~30MB WebAssembly LilyPond binary and unpacked runtime data.
    */
-  public async compile(src: string): Promise<CompileResult> {
-    const logs: string[] = [];
-    const errors: string[] = [];
-    const warnings: string[] = [];
+  public async preload(onProgress?: (loaded: number, total: number) => void): Promise<void> {
+    if (this.isPreloading || this.isReady) return;
+    this.isPreloading = true;
+    try {
+      const comp = this.getCompiler();
+      await comp.preload({
+        onProgress: ({ loadedBytes, totalBytes }) => {
+          onProgress?.(loadedBytes, totalBytes);
+        },
+      });
+      this.isReady = true;
+    } finally {
+      this.isPreloading = false;
+    }
+  }
 
-    // Check version
-    if (!src.includes('\\version')) {
-      warnings.push("warning: no \\version statement found, assuming 2.24.0");
+  /**
+   * Prepares arbitrary student or repertoire LilyPond code so that GNU LilyPond
+   * outputs BOTH the vector SVG pages and the binary MIDI stream in a single compilation pass.
+   */
+  /**
+   * Prepares user input code by ensuring version, point-and-click, and wrapping
+   * inside a score block with layout (SVG) and midi outputs.
+   * Returns the prepared code and the line number offset introduced before user code.
+   */
+  private prepareCode(src: string): { code: string; lineOffset: number } {
+    let prepared = src.trim();
+
+    // Ensure point-and-click links for interactive clickable note navigation
+    if (!prepared.includes('point-and-click')) {
+      prepared = `#(ly:set-option 'point-and-click #t)\n${prepared}`;
     }
 
-    // Detect clef
-    let clef = 'treble';
-    if (src.includes('\\clef bass')) clef = 'bass';
-    else if (src.includes('\\clef alto')) clef = 'alto';
-    else if (src.includes('\\clef tenor')) clef = 'tenor';
+    // Ensure version statement
+    if (!prepared.includes('\\version')) {
+      prepared = `\\version "2.26.0"\n${prepared}`;
+    }
 
-    // Detect key
-    const keyMatch = src.match(/\\key\s+([a-g](?:is|es)?)\s*\\(major|minor)/);
-    const keyRoot = keyMatch ? keyMatch[1] : 'c';
-    const keyMode = keyMatch ? keyMatch[2] : 'major';
-
-    // Detect time signature
-    const timeMatch = src.match(/\\time\s+(\d+\/\d+)/);
-    const timeSig = timeMatch ? timeMatch[1] : '4/4';
-
-    // Resolve notes and timing
-    const isRelative = src.includes('\\relative');
-    const relMatch = src.match(/\\relative\s*([a-g]['',]*)?/);
-    const initialRefMidi = parseReferencePitch(relMatch ? relMatch[1] : undefined);
-
-    let notes: ParsedScoreNote[] = [];
-    const staffBlocks = extractStaffBlocks(src);
-    if (staffBlocks.length > 0) {
-      for (const staff of staffBlocks) {
-        const staffNotes = parseMusicSegment(staff, src, isRelative, initialRefMidi);
-        notes.push(...staffNotes);
+    // If score has explicit \midi block
+    if (prepared.includes('\\midi')) {
+      if (!prepared.includes('\\layout')) {
+        prepared = prepared.replace(/\\midi\s*\{[^}]*\}/, '\\layout { }\n\\midi { }');
       }
-    } else {
-      notes = parseMusicSegment(src, src, isRelative, initialRefMidi);
+      return { code: prepared, lineOffset: 0 };
     }
 
-    // Generate dynamic interactive SVG score
-    const svgMarkup = this.renderSvgScore({
-      clef,
-      keyRoot,
-      keyMode,
-      timeSig,
-      notes,
-      title: this.extractHeaderField(src, 'title'),
-      composer: this.extractHeaderField(src, 'composer')
-    });
+    // If score block exists but lacks \midi, insert \midi before its last closing brace
+    if (prepared.includes('\\score')) {
+      const lastBrace = prepared.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        return {
+          code: prepared.slice(0, lastBrace) + '\n  \\layout { }\n  \\midi { }\n}',
+          lineOffset: 0,
+        };
+      }
+      return { code: prepared + '\n\\score { \\layout { } \\midi { } }', lineOffset: 0 };
+    }
 
-    logs.push("Interpreting music...");
-    logs.push(`Found ${notes.length} notes, clef: ${clef}, time: ${timeSig}`);
-    logs.push("Success: compilation completed.");
+    // Extract \version and \header if present so they sit at top-level outside \score
+    let version = '\\version "2.26.0"';
+    const verMatch = prepared.match(/\\version\s*"[^"]*"/);
+    if (verMatch) version = verMatch[0];
 
+    let header = '';
+    const headMatch = prepared.match(/\\header\s*\{[^}]*\}/s);
+    if (headMatch) header = headMatch[0];
+
+    const pointAndClick = "#(ly:set-option 'point-and-click #t)";
+
+    const music = prepared
+      .replace(/\\version\s*"[^"]*"/, '')
+      .replace(/\\header\s*\{[^}]*\}/s, '')
+      .replace(/#\(ly:set-option\s+'point-and-click\s+#t\)/, '')
+      .trim();
+
+    const prefix = `${version}\n${header ? header + '\n' : ''}${pointAndClick}\n\\score {\n  {\n`;
+    const lineOffset = prefix.split('\n').length - 1;
+
+    // Wrap music in an authentic LilyPond score context with both layout (SVG) and midi
     return {
-      ok: errors.length === 0,
-      pages: [svgMarkup],
-      logs,
-      errors: errors.length,
-      warnings: warnings.length,
-      midiNotes: notes.map((n) => ({
-        pitch: n.pitch,
-        midi: n.midi,
-        duration: n.duration,
-        dots: n.dots,
-        durationBeats: n.durationBeats,
-        timeBeats: n.timeBeats,
-      })),
+      code: `${prefix}${music}\n  }\n  \\layout { }\n  \\midi { }\n}`,
+      lineOffset,
     };
   }
 
-  private extractHeaderField(src: string, field: string): string | null {
-    const regex = new RegExp(`${field}\\s*=\\s*"([^"]+)"`);
-    const match = src.match(regex);
-    return match ? match[1] : null;
+  /**
+   * Converts duration in quarter beats to nominal note value and dot count.
+   */
+  private beatsToDuration(durBeats: number): { duration: number; dots: number } {
+    const table: [number, number, number][] = [
+      [1, 0, 4.0],
+      [1, 1, 6.0],
+      [2, 0, 2.0],
+      [2, 1, 3.0],
+      [4, 0, 1.0],
+      [4, 1, 1.5],
+      [8, 0, 0.5],
+      [8, 1, 0.75],
+      [16, 0, 0.25],
+      [16, 1, 0.375],
+      [32, 0, 0.125],
+    ];
+
+    for (const [dur, dots, beats] of table) {
+      if (Math.abs(durBeats - beats) < 0.05) {
+        return { duration: dur, dots };
+      }
+    }
+
+    const nominal = Math.max(1, Math.round(4 / durBeats));
+    return { duration: nominal, dots: 0 };
   }
 
-  private renderSvgScore(data: {
-    clef: string;
-    keyRoot: string;
-    keyMode: string;
-    timeSig: string;
-    notes: ParsedScoreNote[];
-    title: string | null;
-    composer: string | null;
-  }): string {
-    const width = 800;
-    const height = data.title ? 260 : 180;
-    const staffY = data.title ? 140 : 80;
-    const lineSpacing = 10;
+  /**
+   * Formats a scientific note name from @tonejs/midi into a LilyPond pitch format (e.g. C4, CIS4, FIS4, EES4).
+   */
+  private formatPitch(noteName: string, midiNum: number): string {
+    const letter = noteName.replace(/[^A-Ga-g]/g, '').toUpperCase();
+    const oct = Math.floor(midiNum / 12) - 1;
+    if (noteName.includes('#')) return `${letter}IS${oct}`;
+    if (noteName.includes('b')) return `${letter}ES${oct}`;
+    return `${letter}${oct}`;
+  }
 
-    let svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${width} ${height}" width="100%" height="auto" class="lilypond-score">`;
-    svg += `<defs>
-      <style>
-        .staff-line { stroke: #e2e8f0; stroke-width: 1.2; }
-        .bar-line { stroke: #cbd5e1; stroke-width: 1.8; }
-        .score-title { font-family: 'CenturySchL', serif; font-size: 20px; font-weight: bold; fill: #f8fafc; text-anchor: middle; }
-        .score-composer { font-family: 'CenturySchL', serif; font-size: 14px; font-style: italic; fill: #94a3b8; text-anchor: end; }
-        .score-text { font-family: 'CenturySchL', serif; font-size: 18px; fill: #f1f5f9; }
-        .note-head { fill: #f8fafc; cursor: pointer; transition: fill 0.15s ease; }
-        .note-head:hover { fill: #818cf8; }
-        .note-stem { stroke: #f8fafc; stroke-width: 1.8; stroke-linecap: round; }
-        .note-dot { fill: #f8fafc; }
-      </style>
-    </defs>`;
+  /**
+   * Compiles LilyPond source code into authentic vector SVG pages and true MIDI notes
+   * using the official WebAssembly GNU LilyPond engine.
+   */
+  public async compile(src: string): Promise<CompileResult> {
+    const logs: string[] = [];
+    const compiler = this.getCompiler();
+    const { code: prepared, lineOffset } = this.prepareCode(src);
 
-    // Background sheet
-    svg += `<rect width="${width}" height="${height}" rx="8" fill="#0f172a" stroke="#1e293b" stroke-width="1.5"/>`;
+    try {
+      const result = await compiler.compile(prepared, { format: 'svg' });
+      logs.push(...result.logs);
 
-    // Title & Composer
-    if (data.title) {
-      svg += `<text x="${width / 2}" y="45" class="score-title">${data.title}</text>`;
-    }
-    if (data.composer) {
-      svg += `<text x="${width - 35}" y="70" class="score-composer">${data.composer}</text>`;
-    }
+      // Collect authentic binary MIDI notes
+      const midiNotes: MidiNote[] = [];
+      let midiBytes: Uint8Array | undefined;
 
-    // 5 Staff Lines
-    for (let i = 0; i < 5; i++) {
-      const y = staffY + i * lineSpacing;
-      svg += `<line x1="30" y1="${y}" x2="${width - 30}" y2="${y}" class="staff-line"/>`;
-    }
-
-    // Initial Bar Line
-    svg += `<line x1="30" y1="${staffY}" x2="30" y2="${staffY + 4 * lineSpacing}" class="bar-line"/>`;
-
-    // Authentic SMuFL Clef Glyph (Treble, Bass, Alto, Tenor)
-    let xOffset = 46;
-    const clefData = renderClefSvg(data.clef, xOffset, staffY, lineSpacing);
-    svg += clefData.svg;
-    xOffset += clefData.width + 12;
-
-    // Time Signature (centered numbers)
-    const [num, den] = data.timeSig.split('/');
-    const timeSigX = xOffset + 12;
-    svg += `<text x="${timeSigX}" y="${staffY + 17}" class="score-text" font-weight="bold" text-anchor="middle">${num}</text>`;
-    svg += `<text x="${timeSigX}" y="${staffY + 36}" class="score-text" font-weight="bold" text-anchor="middle">${den}</text>`;
-    xOffset = timeSigX + 22;
-
-    // Engrave Notes with Interactive textedit links and MIDI audio attributes
-    const noteSpacing = Math.min(65, (width - xOffset - 60) / Math.max(1, data.notes.length));
-    const baseC4Y = data.clef === 'treble' ? staffY + 5 * lineSpacing : staffY - lineSpacing;
-
-    data.notes.forEach((note, idx) => {
-      const noteX = xOffset + idx * noteSpacing;
-      // Pitch Y coordinate calculation (each diatonic step = lineSpacing / 2)
-      const semitoneDist = note.midi - 60; // relative to C4
-      const diatonicSteps = Math.round(semitoneDist * (7 / 12));
-      const noteY = baseC4Y - diatonicSteps * (lineSpacing / 2);
-
-      // Render Accidental if note has sharp or flat
-      if (note.pitch.includes('IS')) {
-        svg += renderAccidentalSvg('sharp', noteX - 11, noteY);
-      } else if (note.pitch.includes('ES')) {
-        svg += renderAccidentalSvg('flat', noteX - 11, noteY);
-      }
-
-      // Ledger lines if outside staff
-      if (noteY >= staffY + 5 * lineSpacing) {
-        for (let ly = staffY + 5 * lineSpacing; ly <= noteY; ly += lineSpacing) {
-          svg += `<line x1="${noteX - 9}" y1="${ly}" x2="${noteX + 9}" y2="${ly}" class="staff-line"/>`;
-        }
-      } else if (noteY <= staffY - lineSpacing) {
-        for (let ly = staffY - lineSpacing; ly >= noteY; ly -= lineSpacing) {
-          svg += `<line x1="${noteX - 9}" y1="${ly}" x2="${noteX + 9}" y2="${ly}" class="staff-line"/>`;
+      for (const [name, bytes] of Object.entries(result.files)) {
+        if (name.endsWith('.midi') || name.endsWith('.mid')) {
+          midiBytes = bytes;
+          break;
         }
       }
 
-      // Interactive Note Anchor with textedit links and MIDI playback attributes
-      svg += `<a href="textedit://${note.line}:${note.col}" data-line="${note.line}" data-col="${note.col}" data-midi="${note.midi}" data-pitch="${note.pitch}" data-duration="${note.duration}" data-dots="${note.dots}" data-duration-beats="${note.durationBeats}" data-time-beats="${note.timeBeats}" class="interactive-note" role="button" aria-label="Play note ${note.pitch}">`;
-      // Notehead
-      const isHollow = note.duration <= 2;
-      svg += `<ellipse cx="${noteX}" cy="${noteY}" rx="6" ry="4.5" transform="rotate(-20 ${noteX} ${noteY})" class="note-head" ${isHollow ? 'fill="none" stroke="#f8fafc" stroke-width="2"' : ''}/>`;
+      if (midiBytes && midiBytes.length > 0) {
+        const parsedMidi = new Midi(midiBytes);
+        const bpm = parsedMidi.header.tempos[0]?.bpm ?? 80;
+        const secPerBeat = 60 / bpm;
 
-      // Stem (unless whole note)
-      if (note.duration >= 2) {
-        const stemUp = noteY > staffY + 2 * lineSpacing;
-        const stemX = stemUp ? noteX + 5.5 : noteX - 5.5;
-        const stemEndY = stemUp ? noteY - 32 : noteY + 32;
-        svg += `<line x1="${stemX}" y1="${noteY}" x2="${stemX}" y2="${stemEndY}" class="note-stem"/>`;
-      }
+        for (const track of parsedMidi.tracks) {
+          for (const note of track.notes) {
+            const durBeats = note.duration / secPerBeat;
+            const timeBeats = note.time / secPerBeat;
+            const pitch = this.formatPitch(note.name, note.midi);
+            const { duration, dots } = this.beatsToDuration(durBeats);
 
-      // Augmentation dot(s)
-      if (note.dots && note.dots > 0) {
-        for (let d = 0; d < note.dots; d++) {
-          const dotX = noteX + 10 + d * 5;
-          svg += `<circle cx="${dotX}" cy="${noteY}" r="2" class="note-dot"/>`;
+            midiNotes.push({
+              pitch,
+              midi: note.midi,
+              duration,
+              dots,
+              durationBeats: durBeats,
+              timeBeats: timeBeats,
+            });
+          }
         }
+
+        // Sort by start time, then pitch
+        midiNotes.sort((a, b) => a.timeBeats - b.timeBeats || a.midi - b.midi);
       }
 
-      svg += `</a>`;
-    });
+      // Collect vector SVG page(s)
+      const pages: string[] = [];
+      const svgEntries = Object.entries(result.files).filter(([name]) => name.endsWith('.svg'));
+      // Sort SVG pages by name (score.svg, score-page1.svg, etc.)
+      svgEntries.sort(([a], [b]) => a.localeCompare(b));
 
-    // Final Bar Line
-    svg += `<line x1="${width - 30}" y1="${staffY}" x2="${width - 30}" y2="${staffY + 4 * lineSpacing}" stroke="#cbd5e1" stroke-width="3"/>`;
-    svg += `<line x1="${width - 36}" y1="${staffY}" x2="${width - 36}" y2="${staffY + 4 * lineSpacing}" stroke="#cbd5e1" stroke-width="1.2"/>`;
+      let noteIndex = 0;
+      for (const [, bytes] of svgEntries) {
+        let svgMarkup = new TextDecoder().decode(bytes);
+        // Ensure responsive width & height for container rendering
+        svgMarkup = svgMarkup.replace(
+          /<svg([^>]*)width="[^"]*"([^>]*)height="[^"]*"/,
+          '<svg$1width="100%"$2height="auto" class="lilypond-score"'
+        );
 
-    svg += `</svg>`;
-    return svg;
+        // Adjust point-and-click line numbers to correspond with original user code
+        if (lineOffset > 0) {
+          svgMarkup = svgMarkup.replace(
+            /(?:xlink:)?href="textedit:\/\/\/input\/score\.ly:(\d+):(\d+):(\d+)"/g,
+            (_m, line, c1, c2) => {
+              const origLine = Math.max(1, parseInt(line, 10) - lineOffset);
+              return `xlink:href="textedit:///input/score.ly:${origLine}:${c1}:${c2}"`;
+            }
+          );
+        }
+
+        // Enrich clickable noteheads with interactive classes and MIDI data
+        svgMarkup = svgMarkup.replace(
+          /(<a\s+[^>]*xlink:href="textedit:[^"]*"[^>]*>)(\s*<g[^>]*>\s*<path[^>]*d="M0\s+-[0-9]+c[\s\S]*?<\/a>)/g,
+          (_match, openTag: string, rest: string) => {
+            const curNote = midiNotes[noteIndex++];
+            const midiAttr = curNote ? ` data-midi="${curNote.midi}" data-pitch="${curNote.pitch}"` : '';
+            const updatedOpen = openTag.replace(
+              /<a\s+style="color:inherit;"/,
+              `<a style="color:inherit;" class="interactive-note cursor-pointer"${midiAttr}`
+            );
+            return updatedOpen + rest;
+          }
+        );
+
+        pages.push(svgMarkup);
+      }
+
+      logs.push(`LilyPond Wasm: Compiled ${pages.length} SVG page(s) and ${midiNotes.length} MIDI notes.`);
+
+      return {
+        ok: true,
+        pages,
+        logs,
+        errors: 0,
+        warnings: 0,
+        midiNotes,
+        midiBytes,
+      };
+    } catch (err: unknown) {
+      if (err instanceof LilyPondCompileError) {
+        return {
+          ok: false,
+          pages: [],
+          logs: [...err.logs],
+          errors: 1,
+          warnings: 0,
+          midiNotes: [],
+        };
+      }
+      const message = String((err as any)?.message || err);
+      return {
+        ok: false,
+        pages: [],
+        logs: [message],
+        errors: 1,
+        warnings: 0,
+        midiNotes: [],
+      };
+    }
   }
 }
 

@@ -57,5 +57,5 @@ describe('Curriculum & Exercise Hints Verification (Issue #11)', () => {
       expect(res.pages[0]).toContain('<svg');
       expect(res.pages[0]).toContain('class="lilypond-score"');
     }
-  });
+  }, 30000);
 });
